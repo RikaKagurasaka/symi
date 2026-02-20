@@ -1,0 +1,12 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+.vscode/*
+node_modules/*
+
+# Added by cargo
+
+/target
+src/tests/*.json
+src/tests/*.txt
+*.code-workspace

@@ -1,0 +1,9 @@
+language: 'typescript'
+tasks:
+  dev:
+    command: 'bun tauri dev'
+  install:
+    command: 'bun install'
+  build:
+    command: 'bun tauri build'
+    

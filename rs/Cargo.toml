@@ -1,0 +1,33 @@
+[package]
+name = "symi-rs"
+version = "0.1.0"
+edition = "2024"
+[lib]
+name = "symi"
+path = "src/lib.rs" # 指定库的入口文件
+
+[dependencies]
+logos = "0.16.0"
+rowan = "0.16.1"
+serde = { version = "1.0.149", features = ["derive"] }
+serde_json = "1.0.149"
+strum = { version = "0.27.2", features = ["derive", "strum_macros"] }
+tap = "1.0.1"
+regex = "1.12.2"
+glicol_synth = "0.13.5"
+cpal = "0.17.1"
+anyhow = "1.0.100"
+ringbuf = "0.4.8"
+tokio = { version = "1.49.0", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "macros",
+] }
+parking_lot = "0.12.5"
+itertools = "0.14.0"
+petgraph = "0.6.5"
+midly = "0.5.3"
+
+[build-dependencies]

@@ -1,0 +1,10 @@
+language: 'typescript'
+tasks:
+  dev:
+    command: 'bun dev'
+  build:
+    command: 'bun build'
+  install:
+    command: 'bun install'
+  preview:
+    command: 'bun preview'
