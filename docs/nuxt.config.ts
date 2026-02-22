@@ -1,5 +1,13 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  runtimeConfig: {
+    githubToken: process.env.GITHUB_TOKEN,
+    public: {
+      githubRepo: process.env.NUXT_PUBLIC_GITHUB_REPO || 'RikaKagurasaka/symi'
+    }
+  },
+
+
   modules: [
     '@nuxt/eslint',
     '@nuxt/image',
@@ -31,6 +39,10 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2024-07-11',
+
+  devServer: {
+    port: 3462
+  },
 
   nitro: {
     prerender: {

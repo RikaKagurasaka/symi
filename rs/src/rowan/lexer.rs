@@ -27,7 +27,7 @@ use logos::{Lexer, Logos};
     Hash,
     strum::EnumIs,
     strum::IntoStaticStr,
-    strum::EnumTryAs
+    strum::EnumTryAs,
 )]
 #[repr(u16)]
 #[allow(non_camel_case_types, dead_code)]
@@ -52,7 +52,7 @@ pub enum SyntaxKind {
     Semicolon,
     /// At '@'
     /// Used for pitch chain connector
-    #[token("@")] 
+    #[token("@")]
     At,
     /// ParenthesisPair '()'
     #[token("()")]
@@ -66,8 +66,9 @@ pub enum SyntaxKind {
     #[regex(r"[A-G](#|b)*[+-]*")]
     PitchSpellSimple,
     /// PitchFrequency in Hz (e.g. 440.0, 261.63)
-    /// Must be greater than 1, less than 1e5
-    #[regex(r"\d+(\.\d+)?", |lex| lex.slice().parse::<f32>().ok().filter(|&f| f >= 1.0 && f < 1e8).is_some())]
+    /// Must be greater than 1, less than 1e8
+    /// Allows negative and zero for edo grammar sugar.
+    #[regex(r"-?\d+(\.\d+)?", |lex| lex.slice().parse::<f32>().ok().filter(|&f| f.abs() < 1e8).is_some())]
     PitchFrequency,
     /// PitchRatio (e.g. 3/2, 5/4)
     /// Numerator and denominator are positive integers (u16) and >0
@@ -189,7 +190,6 @@ fn check_edo_groups(
         })
 }
 
-
 impl From<SyntaxKind> for rowan::SyntaxKind {
     /// 将自定义的 `SyntaxKind` 转为 rowan 可识别的 `rowan::SyntaxKind`。
     ///
@@ -293,7 +293,13 @@ mod tests {
         // output all tokens to `tests/sample_tokens.txt`
         let mut output = String::new();
         while let Some(token) = lex.next() {
-            output.push_str(&format!("{:?}: {:#?} @ {}..{}\n", token, lex.slice(), lex.span().start, lex.span().end));
+            output.push_str(&format!(
+                "{:?}: {:#?} @ {}..{}\n",
+                token,
+                lex.slice(),
+                lex.span().start,
+                lex.span().end
+            ));
         }
         let out_path = path.with_file_name("sample_tokens.txt");
         fs::write(&out_path, output).unwrap();

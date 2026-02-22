@@ -31,7 +31,7 @@ Symi编辑器支持实时回放、钢琴窗预览和导出MIDI，适合实验性
 
   :::u-button
   ---
-  to: /getting-started
+  to: /getting-started/installation
   color: neutral
   variant: outline
   size: xl

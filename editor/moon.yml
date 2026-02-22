@@ -6,6 +6,11 @@ tasks:
     command: 'bun install'
   build:
     command: 'bun tauri build'
+    outputs: ['./src-tauri/target/release/bundle/nsis/*.exe']
+    inputs: 
+      - './src-tauri/**/*'
+      - './src/**/*'
+      - './package.json'
   third_party_notices:
     command: 'pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/generate-third-party-notices.ps1'
     

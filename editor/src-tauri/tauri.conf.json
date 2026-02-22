@@ -5,7 +5,7 @@
   "identifier": "link.rika.symi-editor",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:3461",
     "beforeDevCommand": "bun dev",
     "beforeBuildCommand": "bun run generate"
   },

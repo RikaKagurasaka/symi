@@ -54,8 +54,15 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="toast-fade">
-    <div v-if="modelValue" class="toast-wrap">
-      <div class="toast" :class="[`toast-${type}`]">
+    <div v-if="modelValue" class="fixed z-70 right-4 top-4">
+      <div
+        class="px-3 py-2 rounded border text-sm bg-slate-900"
+        :class="[
+          type === 'success' ? 'border-emerald-500/60 text-emerald-300' : '',
+          type === 'error' ? 'border-red-500/60 text-red-300' : '',
+          type === 'info' ? 'border-slate-600 text-slate-200' : ''
+        ]"
+      >
         {{ message }}
       </div>
     </div>
@@ -63,27 +70,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.toast-wrap {
-  @apply fixed z-[70] right-4 top-4;
-}
-
-.toast {
-  @apply px-3 py-2 rounded border text-sm;
-  @apply bg-slate-900 text-slate-200 border-slate-700;
-}
-
-.toast-success {
-  @apply border-emerald-500/60 text-emerald-300;
-}
-
-.toast-error {
-  @apply border-red-500/60 text-red-300;
-}
-
-.toast-info {
-  @apply border-slate-600 text-slate-200;
-}
-
 .toast-fade-enter-active,
 .toast-fade-leave-active {
   transition: opacity 0.2s ease;

@@ -11,6 +11,9 @@ export default defineNuxtConfig({
     '@vueuse/nuxt',
     '@unocss/nuxt'
   ],
+  devServer: {
+    port: 3461
+  },
   unocss: {
     nuxtLayers: true,
     presets: [presetWind4({

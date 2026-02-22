@@ -75,7 +75,7 @@ fn parse_normal_line(parser: &mut Parser, is_ghost: bool) {
             {
                 parse_bpm(parser);
             }
-            SyntaxKindPitches!() | SyntaxKind::Identifier => {
+            SyntaxKindPitches!() | SyntaxKind::Identifier | SyntaxKind::Semicolon => {
                 parse_note_group(parser);
             }
             _ => {
@@ -97,15 +97,17 @@ fn parse_normal_line(parser: &mut Parser, is_ghost: bool) {
 fn parse_note_group(parser: &mut Parser) {
     let note_group_marker = parser.start_node();
     let mut is_group = false;
-    let mut note_marker = parser.start_node();
+    let mut note_marker = None;
     while let Some(tok) = parser.peek() {
         match tok {
             SyntaxKindPitches!() => {
+                note_marker.get_or_insert_with(|| parser.start_node());
                 parser.bump(); // consume pitch token
                 parse_pitch_chain_tail(parser);
             }
             SyntaxKind::Identifier => {
                 // If it's a argumented macro invocation
+                note_marker.get_or_insert_with(|| parser.start_node());
                 let mm = parser.start_node();
                 if parser.nth(1) == Some(SyntaxKind::LParen) {
                     parser.bump(); // consume macro name
@@ -125,9 +127,10 @@ fn parse_note_group(parser: &mut Parser) {
             }
             SyntaxKind::Colon | SyntaxKind::Semicolon => {
                 is_group = true;
-                note_marker.complete(parser, SyntaxKind::NODE_NOTE);
+                note_marker
+                    .take()
+                    .map(|m| m.complete(parser, SyntaxKind::NODE_NOTE));
                 parser.bump(); // consume colon/semicolon
-                note_marker = parser.start_node(); // start a new note
             }
             SyntaxKind::DurationCommas | SyntaxKind::DurationFraction => {
                 parser.bump(); // consume duration token
@@ -143,7 +146,9 @@ fn parse_note_group(parser: &mut Parser) {
         }
     }
     // Complete any pending note if it is not empty
-    note_marker.complete(parser, SyntaxKind::NODE_NOTE);
+    note_marker
+        .take()
+        .map(|m| m.complete(parser, SyntaxKind::NODE_NOTE));
     if is_group {
         note_group_marker.complete(parser, SyntaxKind::NODE_NOTE_GROUP);
     } else {
@@ -223,14 +228,19 @@ fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker, is_rela
             SyntaxKind::PitchSpellOctave
             | SyntaxKind::PitchSpellSimple
             | SyntaxKind::PitchFrequency
-                if !is_relative =>
+                // if !is_relative 
+                =>
             {
                 parser.bump(); // consume pitch token
             }
             SyntaxKind::PitchCents | SyntaxKind::PitchRatio | SyntaxKind::PitchEdo
-                if is_relative =>
+                // if is_relative
+                 =>
             {
                 parser.bump(); // consume pitch token
+            }
+            SyntaxKind::Identifier=>{
+                parser.bump(); // consume macro invocation argument
             }
             SyntaxKind::At => {
                 parser.bump(); // consume pitch chain connector

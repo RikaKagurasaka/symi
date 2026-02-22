@@ -12,7 +12,30 @@ Symi Editor是一个基于Tauri的跨平台桌面应用程序，提供了一个�
 
 # 文档
 
-> 锐意开发中……
+你可以在[文档站点](https://symi.rika.link/){target=_blank}找到Symi的使用说明和语法介绍。
+
+# 开发和构建
+1. 确保你已经安装了Rust和Node.js工具链。
+
+2. 克隆仓库并安装依赖
+
+  ```bash
+  git clone https://github.com/RikaKagurasaka/symi.git
+  cd symi/editor
+  npm install
+  ```
+
+3. 启动开发服务器（可选）
+
+  ```bash
+    npm run tauri dev
+  ```
+
+4. 构建发布版本
+
+  ```bash
+    npm run tauri build
+  ```
 
 # 许可证
 

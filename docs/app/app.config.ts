@@ -53,20 +53,5 @@ export default defineAppConfig({
   },
   toc: {
     title: '目录',
-    // bottom: {
-    //   title: 'Community',
-    //   edit: 'https://github.com/nuxt-ui-templates/docs/edit/main/content',
-    //   links: [{
-    //     icon: 'i-lucide-star',
-    //     label: 'Star on GitHub',
-    //     to: 'https://github.com/RikaKagurasaka/symi',
-    //     target: '_blank'
-    //   }, {
-    //     icon: 'i-lucide-book-open',
-    //     label: 'Symi docs',
-    //     to: 'https://symi-docs.vercel.app/',
-    //     target: '_blank'
-    //   }]
-    // }
   }
 })

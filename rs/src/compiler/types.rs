@@ -197,7 +197,7 @@ impl Note {
                 base_frequency * 2f32.powf(semitone_diff as f32 / 12.0)
             }
             Pitch::SpellSimple(spell) => {
-                let semitone_diff = spell - (base_note % 12);
+                let semitone_diff = spell.div_euclid(12) * 12 + (spell - base_note).rem_euclid(12);
                 base_frequency * 2f32.powf(semitone_diff as f32 / 12.0)
             }
             Pitch::Frequency(f) => f,
@@ -220,7 +220,6 @@ impl Note {
         }
     }
 
-    
     pub fn note_from_pitch_with_base(pitch: Pitch, base_note: i16, base_frequency: f32) -> Note {
         let freq = match pitch {
             Pitch::SpellOctave(spell) => {
@@ -251,7 +250,7 @@ impl Note {
         }
     }
 
-    pub fn base_note_from_pitch( pitch: Pitch, freq: f32, current_base: (i16, f32)) -> i16 {
+    pub fn base_note_from_pitch(pitch: Pitch, freq: f32, current_base: (i16, f32)) -> i16 {
         match pitch {
             Pitch::SpellOctave(s) | Pitch::SpellSimple(s) => s,
             _ => {

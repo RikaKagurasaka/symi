@@ -434,9 +434,20 @@ impl Compiler {
             SyntaxKind::PitchSpellOctave => Pitch::parse_spell_octave(text),
             SyntaxKind::PitchSpellSimple => Pitch::parse_spell_simple(text),
             SyntaxKind::PitchFrequency => {
+                // handle edo grammar sugar: if edo_def is set and the token text is an integer, parse it as edo and convert to frequency
                 if self.state.edo_def == 0 || text.contains('.') {
-                    self.state.edo_def = 0;
-                    Pitch::parse_fequency(text)
+                    if text
+                        .parse::<f32>()
+                        .ok()
+                        .filter(|&f| f >= 1.0 && f < 1e8)
+                        .is_some()
+                    {
+                        self.state.edo_def = 0;
+                        Pitch::parse_fequency(text)
+                    } else {
+                        self.error(format!("Invalid frequency value: {}", text), t.text_range());
+                        None
+                    }
                 } else {
                     Pitch::parse_edo(format!("{}\\{}", text, self.state.edo_def).as_str())
                 }
@@ -660,7 +671,7 @@ impl Compiler {
                     None
                 }
             })
-            .unwrap_or(self.state.quantize);
+            .unwrap_or(Rational32::zero());
         let mut notes: Vec<Note> = Vec::new();
 
         if let Some(node) = n

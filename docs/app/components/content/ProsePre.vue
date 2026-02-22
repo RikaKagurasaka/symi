@@ -7,8 +7,6 @@ import { createHighlighter } from "shiki";
 import { symiLang, symiThemeDark, symiThemeLight } from "../../assets/symi-textmate";
 import { useClipboard } from "@vueuse/core";
 
-
-
 const getSlotChildrenText = (children: any) =>
   children
     .map((node: any) => {
@@ -62,7 +60,7 @@ async function copyCode() {
 </script>
 
 <template>
-  <div class="relative rounded-lg border border-default">
+  <div class="relative rounded-lg border border-default mb-4">
     <UButton
       class="absolute top-2 right-2 z-10"
       size="xs"

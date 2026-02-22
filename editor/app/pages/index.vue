@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="pageRef"
-    class="index-page w-full h-full grid duration-300 ease-in-out"
+    class="w-full h-full grid duration-300 ease-in-out bg-slate-800"
     :class="isSidebarOpen ? 'grid-cols-[16rem_1fr]' : 'grid-cols-[3rem_1fr]'"
     :style="{ gridTemplateRows }"
   >
@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
       @toggle="isSidebarOpen = !isSidebarOpen"
     />
 
-    <div class="content">
+    <div class="min-w-0 min-h-0 place-self-stretch flex flex-col">
       <StatusBar />
       <Editor
         class="w-full h-full flex-1 overflow-auto bg-[#0f172a]"
@@ -182,17 +182,17 @@ onBeforeUnmount(() => {
         @update:state="editorState = $event"
         @update:view="editorView = $event"
       />
-      <div v-else class="empty-state">
+      <div v-else class="w-full h-full text-center py-8 cursor-default flex flex-col items-center justify-center text-slate-400">
         <p>
-          请<a @click="newFile('')">新建</a>或<a @click="openFile">打开</a>文件
+          请<a class="underline cursor-pointer text-slate-300 underline-offset-4" @click="newFile('')">新建</a>或<a class="underline cursor-pointer text-slate-300 underline-offset-4" @click="openFile">打开</a>文件
         </p>
-        <p>或者打开<a @click="newFile(sampleDoc)">示例文件</a></p>
+        <p>或者打开<a class="underline cursor-pointer text-slate-300 underline-offset-4" @click="newFile(sampleDoc)">示例文件</a></p>
       </div>
     </div>
     <div
       v-if="hasPianoRoll"
-      class="row-resizer col-start-2 row-start-2"
-      :class="{ 'is-resizing': resizing }"
+      class="h-full w-full col-start-2 row-start-2 cursor-row-resize bg-slate-700/40 hover:bg-slate-600/60 active:bg-slate-500/70 touch-none"
+      :class="{ 'bg-slate-500/70': resizing }"
       @pointerdown="startResize"
     />
     <PianoRoll
@@ -214,29 +214,3 @@ onBeforeUnmount(() => {
 
   <AppToast v-model="toastOpen" :type="toastType" :message="toastMessage" />
 </template>
-
-<style lang="css" scoped>
-.index-page {
-  @apply bg-slate-800;
-}
-
-.content {
-  @apply min-w-0 min-h-0 place-self-stretch flex flex-col;
-}
-
-.row-resizer {
-  @apply h-full w-full col-start-2 row-start-2 cursor-row-resize;
-  @apply bg-slate-700/40 hover:bg-slate-600/60 active:bg-slate-500/70;
-  touch-action: none;
-}
-
-.row-resizer.is-resizing {
-  @apply bg-slate-500/70;
-}
-
-.empty-state {
-  @apply w-full h-full text-center py-8 cursor-default flex flex-col items-center justify-center;
-  @apply [&_a]:(underline cursor-pointer text-slate-300 underline-offset-4);
-  @apply text-slate-400;
-}
-</style>

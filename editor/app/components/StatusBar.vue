@@ -55,16 +55,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="status-bar">
-    <div class="status-item">
+  <div class="px-4 py-2 text-sm grid grid-cols-[auto_auto_auto_1fr] gap-8 items-center text-slate-300 bg-slate-900">
+    <div class="inline-flex gap-4 items-center whitespace-nowrap">
       行:列
-      <span class="status-value"
+      <span class="text-slate-200 font-semibold"
         >{{ cursorInfo.line }}:{{ cursorInfo.column }}</span
       >
     </div>
-    <div class="status-item">
+    <div class="inline-flex gap-4 items-center whitespace-nowrap">
       小节
-      <span class="status-value grid grid-cols-[auto_auto] items-center gap-1">
+      <span class="text-slate-200 font-semibold grid grid-cols-[auto_auto] items-center gap-1">
         <span class="text-end">{{ barText }}</span>
         <div class="flex flex-col items-center w-fit">
           <span class="text-xs flex-1">{{
@@ -77,13 +77,13 @@ onMounted(() => {
         </div>
       </span>
     </div>
-    <div class="status-item">
-      时间 <span class="status-value">{{ timeText }}</span>
+    <div class="inline-flex gap-4 items-center whitespace-nowrap">
+      时间 <span class="text-slate-200 font-semibold">{{ timeText }}</span>
     </div>
-    <div class="status-item status-item-volume">
+    <div class="inline-flex gap-4 items-center whitespace-nowrap justify-self-end">
       音量
       <input
-        class="volume-slider"
+        class="w-32 accent-slate-300"
         type="range"
         min="0"
         max="100"
@@ -91,35 +91,7 @@ onMounted(() => {
         :value="volume"
         @input="handleVolumeInput"
       />
-      <span class="status-value volume-value">{{ volumeText }}</span>
+      <span class="text-slate-200 font-semibold w-10 text-right">{{ volumeText }}</span>
     </div>
   </div>
 </template>
-
-<style lang="css" scoped>
-.status-bar {
-  @apply px-4 py-2 text-sm;
-  @apply grid grid-cols-[auto_auto_auto_1fr] gap-8 items-center;
-  @apply text-slate-300 bg-slate-900;
-}
-
-.status-item {
-  @apply inline-flex gap-4 items-center whitespace-nowrap;
-}
-
-.status-value {
-  @apply text-slate-200 font-semibold;
-}
-
-.status-item-volume {
-  @apply justify-self-end;
-}
-
-.volume-slider {
-  @apply w-32 accent-slate-300;
-}
-
-.volume-value {
-  @apply w-10 text-right;
-}
-</style>
