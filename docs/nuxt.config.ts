@@ -49,6 +49,9 @@ export default defineNuxtConfig({
       routes: [
         '/'
       ],
+      ignore: [
+        '/mcp'
+      ],
       crawlLinks: true,
       autoSubfolderIndex: false
     }

@@ -3,9 +3,8 @@
 // Posted by antoni
 // Retrieved 2026-02-21, License - CC BY-SA 4.0
 
-import { createHighlighter } from "shiki";
-import { symiLang, symiThemeDark, symiThemeLight } from "../../assets/symi-textmate";
-import { useClipboard } from "@vueuse/core";
+import { useClipboard, useColorMode } from "@vueuse/core";
+import { useSymiHighlighter } from "../../composables/useSymiHighlighter";
 
 const getSlotChildrenText = (children: any) =>
   children
@@ -26,10 +25,7 @@ defineSlots<{ default?: any }>();
 const colorMode = useColorMode();
 const { copy, copied } = useClipboard();
 
-const highlighter = await createHighlighter({
-  themes: [symiThemeLight as any, symiThemeDark as any],
-  langs: [symiLang],
-});
+const highlighter = await useSymiHighlighter();
 
 const highlightedHtml = computed(() => {
   const source = slotTexts.value;
