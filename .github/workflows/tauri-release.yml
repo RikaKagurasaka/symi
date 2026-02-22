@@ -89,7 +89,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.event.release.tag_name }}"
-          $source = "editor/src-tauri/target/release/app.exe"
+          $source = "editor/src-tauri/target/release/symi-editor.exe"
           if (-not (Test-Path $source)) {
             throw "Portable exe not found at $source"
           }
