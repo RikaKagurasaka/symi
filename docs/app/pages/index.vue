@@ -13,8 +13,8 @@ useSeoMeta({
   ogTitle: title,
   description,
   ogDescription: description,
-  ogImage: 'https://symi.rika.link/ogImage.png',
-  twitterImage: 'https://symi.rika.link/ogImage.png',
+  ogImage: 'https://symi.rika.link/images/ogImage.png',
+  twitterImage: 'https://symi.rika.link/images/ogImage.png',
 })
 </script>
 
