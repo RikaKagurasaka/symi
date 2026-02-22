@@ -1,7 +1,9 @@
 ---
 seo:
   title: Symi 编辑器文档
-  description: Create stunning, fast and SEO-optimized documentation sites with Nuxt UI.
+  description: Symi 编辑器是一款基于文本的微分音乐编辑器，支持多种音高和节奏表记，适合实验性音乐创作。
+  ogTitle: Symi 编辑器文档
+  ogDescription: Symi 编辑器是一款基于文本的微分音乐编辑器，支持多种音高和节奏表记，适合实验性音乐创作。
 ---
 
 ::u-page-hero{class="dark:bg-gradient-to-b from-neutral-900 to-neutral-950"}
