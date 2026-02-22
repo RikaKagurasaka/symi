@@ -54,9 +54,6 @@ pub enum SyntaxKind {
     /// Used for pitch chain connector
     #[token("@")]
     At,
-    /// ParenthesisPair '()'
-    #[token("()")]
-    ParenthesisPair,
     /// PitchSpellOctave (e.g. C#4, Db3, A5, Gb6)
     /// Octave is -9 to 19
     #[regex(r"[A-G](#|b)*(-[1-9]|1?[0-9])")]
@@ -129,7 +126,6 @@ pub enum SyntaxKind {
     // ==== Rowan Nodes ====
     NODE_ROOT,
     NODE_MACRODEF_SIMPLE,
-    NODE_MACRODEF_RELATIVE,
     NODE_MACRODEF_COMPLEX,
     NODE_MACRODEF_COMPLEX_BODY,
     NODE_GHOST_LINE,
@@ -247,7 +243,6 @@ impl SyntaxKind {
         match self {
             SyntaxKind::NODE_ROOT
             | SyntaxKind::NODE_MACRODEF_SIMPLE
-            | SyntaxKind::NODE_MACRODEF_RELATIVE
             | SyntaxKind::NODE_MACRODEF_COMPLEX
             | SyntaxKind::NODE_MACRODEF_COMPLEX_BODY
             | SyntaxKind::NODE_GHOST_LINE

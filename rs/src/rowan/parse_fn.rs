@@ -106,23 +106,10 @@ fn parse_note_group(parser: &mut Parser) {
                 parse_pitch_chain_tail(parser);
             }
             SyntaxKind::Identifier => {
-                // If it's a argumented macro invocation
                 note_marker.get_or_insert_with(|| parser.start_node());
                 let mm = parser.start_node();
-                if parser.nth(1) == Some(SyntaxKind::LParen) {
-                    parser.bump(); // consume macro name
-                    parser.expect(SyntaxKind::LParen);
-                    if parser
-                        .peek()
-                        .is_some_and(|s| s.is_pitch() || s.is_formal_pitch())
-                    {
-                        parser.bump(); // consume argument note
-                        parse_pitch_chain_tail(parser);
-                    }
-                    parser.expect(SyntaxKind::RParen);
-                } else {
-                    parser.bump(); // consume non argument identifier
-                }
+                parser.bump(); // consume macro name
+                parse_pitch_chain_tail(parser);
                 mm.complete(parser, SyntaxKind::NODE_MACRO_INVOKE);
             }
             SyntaxKind::Colon | SyntaxKind::Semicolon => {
@@ -211,35 +198,28 @@ fn parse_base_pitch(parser: &mut Parser) {
 fn parse_macro_def(parser: &mut Parser) {
     let m = parser.start_node();
     parser.expect(SyntaxKind::Identifier); // consume macro name
-    let is_relative = parser.eat(SyntaxKind::ParenthesisPair); // optional argument
     parser.expect(SyntaxKind::Equals); // consume '='
     if parser.peek().is_some_and(|s| s.is_newline()) {
         parse_multi_line_macro_def(parser, m, false);
     } else if parser.peek().is_some_and(|s| s.is_pitch()) {
-        parse_simple_macro_def(parser, m, is_relative);
+        parse_simple_macro_def(parser, m);
     } else {
         parse_multi_line_macro_def(parser, m, true);
     }
 }
 
-fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker, is_relative: bool) {
+fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker) {
     while let Some(tok) = parser.peek() {
         match tok {
             SyntaxKind::PitchSpellOctave
             | SyntaxKind::PitchSpellSimple
-            | SyntaxKind::PitchFrequency
-                // if !is_relative 
-                =>
-            {
+            | SyntaxKind::PitchFrequency => {
                 parser.bump(); // consume pitch token
             }
-            SyntaxKind::PitchCents | SyntaxKind::PitchRatio | SyntaxKind::PitchEdo
-                // if is_relative
-                 =>
-            {
+            SyntaxKind::PitchCents | SyntaxKind::PitchRatio | SyntaxKind::PitchEdo => {
                 parser.bump(); // consume pitch token
             }
-            SyntaxKind::Identifier=>{
+            SyntaxKind::Identifier => {
                 parser.bump(); // consume macro invocation argument
             }
             SyntaxKind::At => {
@@ -257,14 +237,7 @@ fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker, is_rela
             }
         }
     }
-    m.complete(
-        parser,
-        if is_relative {
-            SyntaxKind::NODE_MACRODEF_RELATIVE
-        } else {
-            SyntaxKind::NODE_MACRODEF_SIMPLE
-        },
-    );
+    m.complete(parser, SyntaxKind::NODE_MACRODEF_SIMPLE);
 }
 
 fn parse_multi_line_macro_def(parser: &mut Parser, m: super::marker::Marker, is_single_line: bool) {
@@ -367,18 +340,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_macro_relative_def_ok() {
-        let result = parse_source(Arc::from("bar () =  3/2\n"));
-        assert!(result.errors().is_empty());
-        let root = result.syntax_node();
-        let def = root.children().find(|n| {
-            let kind: SyntaxKind = n.kind().into();
-            kind == SyntaxKind::NODE_MACRODEF_RELATIVE
-        });
-        assert!(def.is_some());
-    }
-
-    #[test]
     fn parse_macro_complex_def_ok() {
         let result = parse_source(Arc::from("baz =\nC4,\n\n"));
         assert!(result.errors().is_empty());
@@ -439,12 +400,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_macro_invoke_with_arg_ok() {
+    fn parse_macro_invoke_with_arg_reports_error() {
         let result = parse_source(Arc::from("foo(C4),\n"));
-        assert!(result.errors().is_empty());
-        let kinds = collect_kinds(&result.syntax_node());
-        assert!(kinds.contains(&SyntaxKind::NODE_MACRO_INVOKE));
-        assert!(kinds.contains(&SyntaxKind::NODE_NOTE));
+        assert!(!result.errors().is_empty());
     }
 
     #[test]
@@ -460,11 +418,26 @@ mod tests {
     }
 
     #[test]
-    fn parse_pitch_chain_macro_arg_ok() {
-        let result = parse_source(Arc::from("foo(C4@5/4),\n"));
+    fn parse_pitch_chain_macro_invoke_ok() {
+        let result = parse_source(Arc::from("foo@C4@3/2,\n"));
         assert!(result.errors().is_empty());
-        let kinds = collect_kinds(&result.syntax_node());
-        assert!(kinds.contains(&SyntaxKind::NODE_MACRO_INVOKE));
+        let root = result.syntax_node();
+        let has_invoke = root.descendants().any(|n| {
+            let kind: SyntaxKind = n.kind().into();
+            kind == SyntaxKind::NODE_MACRO_INVOKE
+        });
+        assert!(has_invoke);
+        let has_at = root.descendants_with_tokens().any(|nt| {
+            nt.into_token()
+                .is_some_and(|t| t.kind() == SyntaxKind::At.into())
+        });
+        assert!(has_at);
+    }
+
+    #[test]
+    fn parse_pitch_chain_macro_arg_reports_error() {
+        let result = parse_source(Arc::from("foo(C4@5/4),\n"));
+        assert!(!result.errors().is_empty());
     }
 
     #[test]
@@ -493,12 +466,11 @@ mod tests {
 
     #[test]
     fn parse_mixed_program_ok() {
-        let source = "foo = C4\nbar () = 3/2\n<C4=440>\n(120)\n(3/4)\nC4:D4,\n";
+        let source = "foo = C4\nbar = 3/2\n<C4=440>\n(120)\n(3/4)\nC4:D4,\n";
         let result = parse_source(Arc::from(source));
         assert!(result.errors().is_empty());
         let kinds = collect_kinds(&result.syntax_node());
         assert!(kinds.contains(&SyntaxKind::NODE_MACRODEF_SIMPLE));
-        assert!(kinds.contains(&SyntaxKind::NODE_MACRODEF_RELATIVE));
         assert!(kinds.contains(&SyntaxKind::NODE_BASE_PITCH_DEF));
         assert!(kinds.contains(&SyntaxKind::NODE_BPM_DEF));
         assert!(kinds.contains(&SyntaxKind::NODE_TIME_SIGNATURE_DEF));

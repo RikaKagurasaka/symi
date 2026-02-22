@@ -68,32 +68,89 @@ export default defineNuxtConfig({
   },
 
   llms: {
-    domain: 'https://docs-template.nuxt.dev/',
-    title: 'Nuxt Docs Template',
-    description: 'A template for building documentation with Nuxt UI and Nuxt Content.',
+    domain: 'https://symi.rika.link',
+    title: 'Symi Documentation',
+    description: 'Documentation for the Symi, a music notation language for microtonal music.',
     full: {
-      title: 'Nuxt Docs Template - Full Documentation',
-      description: 'This is the full documentation for the Nuxt Docs Template.'
+      title: 'Symi Documentation - Full Version',
+      description: 'The full version of the Symi documentation, including all details and examples.'
     },
     sections: [
       {
         title: 'Getting Started',
-        contentCollection: 'docs',
-        contentFilters: [
-          { field: 'path', operator: 'LIKE', value: '/getting-started%' }
+        description: 'Install Symi Editor and learn the core syntax basics.',
+        links: [
+          {
+            title: 'Introduction',
+            description: 'What Symi is and why it exists.',
+            href: '/getting-started'
+          },
+          {
+            title: 'Installation',
+            description: 'Download and install Symi Editor.',
+            href: '/getting-started/installation'
+          },
+          {
+            title: 'Usage',
+            description: 'Write, preview and export your music.',
+            href: '/getting-started/usage'
+          }
         ]
       },
       {
-        title: 'Essentials',
-        contentCollection: 'docs',
-        contentFilters: [
-          { field: 'path', operator: 'LIKE', value: '/essentials%' }
+        title: 'Grammar Reference',
+        description: 'Control statements, pitch syntax, timing and macros.',
+        links: [
+          {
+            title: 'Overview',
+            description: 'Core grammar concepts and structure.',
+            href: '/grammars'
+          },
+          {
+            title: 'Control',
+            description: 'BPM, time signature and other global controls.',
+            href: '/grammars/control'
+          },
+          {
+            title: 'Pitch',
+            description: 'Pitch notation and microtonal expressions.',
+            href: '/grammars/pitch'
+          },
+          {
+            title: 'Time',
+            description: 'Duration and rhythm notation.',
+            href: '/grammars/time'
+          },
+          {
+            title: 'Macro',
+            description: 'Reusable syntax blocks and expansion.',
+            href: '/grammars/macro'
+          }
+        ]
+      },
+      {
+        title: 'LLM & MCP',
+        description: 'Machine-friendly endpoints and MCP integration for AI tools.',
+        links: [
+          {
+            title: 'LLM & MCP Guide',
+            description: 'How to use llms.txt, llms-full.txt and MCP endpoints.',
+            href: '/llm'
+          }
         ]
       }
+    ],
+    notes: [
+      'For machine consumption, prefer /llms.txt for index-level context and /llms-full.txt for detailed content.',
+      'MCP tools are available at /mcp and include list-pages and get-page for documentation retrieval.'
     ]
   },
 
   mcp: {
-    name: 'Docs template'
+    name: 'Symi Documentation MCP',
+    version: '1.0.0',
+    route: '/mcp',
+    browserRedirect: '/llm',
+    dir: 'mcp'
   }
 })

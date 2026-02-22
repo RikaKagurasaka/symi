@@ -37,7 +37,7 @@ export default defineAppConfig({
     }]
   },
   footer: {
-    credits: `Built with Nuxt UI • © ${new Date().getFullYear()}`,
+    credits: `Built with Nuxt UI • © ${new Date().getFullYear()} • Developed by Rika with <3`,
     colorMode: false,
     // links: [{
     //   'icon': 'i-simple-icons-discord',
