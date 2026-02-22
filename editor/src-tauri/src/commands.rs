@@ -201,7 +201,7 @@ pub fn get_events(file_id: String) -> Vec<NoteEvent> {
                 span_invoked_to: event.range_invoked.map(|r| btc(r.end().into())),
                 pitch_ratio: 0.0,
             }),
-            EventBody::BaseFequencyDef(f)=>Some(NoteEvent {
+            EventBody::BaseFequencyDef(f) => Some(NoteEvent {
                 r#type: "BaseFrequencyDef",
                 freq: *f,
                 start_sec: event.start_time.seconds,

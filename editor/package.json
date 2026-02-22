@@ -24,6 +24,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "~2.6.0",
     "@tauri-apps/plugin-fs": "~2.4.5",
+    "@tauri-apps/plugin-opener": "~2",
     "@tauri-apps/plugin-window-state": "~2",
     "@types/d3": "^7.4.3",
     "@unocss/core": "^66.6.0",

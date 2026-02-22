@@ -9,6 +9,21 @@
     "main"
   ],
   "permissions": [
-    "window-state:default"
+    "window-state:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://*.rika.link/*"
+        },
+        {
+          "url": "https://github.com/*"
+        },
+        {
+          "url": "https://discord.gg/*"
+        }
+      ]
+    }
   ]
 }

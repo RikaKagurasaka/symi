@@ -1,7 +1,5 @@
 use std::ops::{Add, AddAssign, Div, Mul, Neg};
 
-use serde::de;
-
 #[derive(Debug, Clone, Copy)]
 pub struct Rational32(pub i32, pub i32);
 

@@ -54,7 +54,7 @@ jobs:
             patchelf
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2

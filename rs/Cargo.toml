@@ -2,6 +2,7 @@
 name = "symi-rs"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 [lib]
 name = "symi"
 path = "src/lib.rs" # 指定库的入口文件

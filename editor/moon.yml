@@ -6,4 +6,6 @@ tasks:
     command: 'bun install'
   build:
     command: 'bun tauri build'
+  third_party_notices:
+    command: 'pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/generate-third-party-notices.ps1'
     

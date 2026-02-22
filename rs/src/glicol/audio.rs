@@ -52,10 +52,6 @@ impl AudioHandle {
         config.buffer_size = BufferSize::Fixed(AUDIO_CONTEXT_BUFFER_SIZE as u32);
         let sr = config.sample_rate as usize;
         let output_channels = config.channels as usize;
-        println!(
-            "sample rate: {}, channels: {}, buffer size: {:?}",
-            config.sample_rate, config.channels, config.buffer_size
-        );
         // 创建音频上下文
         let context = AudioContextBuilder::<AUDIO_CONTEXT_BUFFER_SIZE>::new()
             .sr(sr)

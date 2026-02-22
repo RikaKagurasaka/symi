@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { openUrl } from "@tauri-apps/plugin-opener";
+import About from "./About.vue";
+import ThirdPartyLibs from "./ThirdPartyLibs.vue";
+
 const props = defineProps<{
   modelValue: boolean;
 }>();
@@ -9,6 +13,13 @@ const emit = defineEmits<{
 
 function closeModal() {
   emit("update:modelValue", false);
+}
+
+const thirdPartyModalOpen = ref(false);
+const aboutModalOpen = ref(false);
+
+async function openDocsAndUpdates() {
+  await openUrl("https://symi.rika.link");
 }
 
 useEventListener(window, "keydown", (event: KeyboardEvent) => {
@@ -49,8 +60,21 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
           <li><code>Ctrl+鼠标左键</code>：跳转光标到点击位置</li>
           <li><code>鼠标中键</code>：拖动视图</li>
         </ul>
+
+        <div class="action-group">
+          <button class="action-btn" @click="aboutModalOpen = true">关于</button>
+          <button class="action-btn" @click="thirdPartyModalOpen = true">
+            第三方库许可说明
+          </button>
+          <button class="action-btn" @click="void openDocsAndUpdates()">
+            查看文档和更新
+          </button>
+        </div>
       </div>
     </div>
+
+    <About v-model="aboutModalOpen" />
+    <ThirdPartyLibs v-model="thirdPartyModalOpen" />
   </div>
 </template>
 
@@ -85,5 +109,13 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
   code {
     @apply px-1.5 py-0.5 rounded bg-slate-800 text-slate-100;
   }
+}
+
+.action-group {
+  @apply pt-2 flex flex-wrap gap-2;
+}
+
+.action-btn {
+  @apply px-3 py-1.5 rounded text-xs bg-slate-700 text-slate-100 hover:bg-slate-600 transition-colors;
 }
 </style>
