@@ -169,31 +169,29 @@ impl Compiler {
         match note_kind {
             SyntaxKind::NODE_MACRODEF_SIMPLE => {
                 let mut pitches: Vec<Note> = Vec::new();
-                let mut current_tokens: Vec<SyntaxToken> = Vec::new();
-                for nt in node.children_with_tokens() {
-                    let Some(token) = nt.into_token() else {
+                for child in node.children() {
+                    if !child.kind().is_node_note() {
                         continue;
-                    };
-                    match token.kind() {
-                        kind if kind.is_pitch() || kind.is_at() => current_tokens.push(token),
-                        SyntaxKind::Colon => {
-                            if !current_tokens.is_empty() {
-                                if let Some(note) = self.parse_pitch_chain_tokens(
-                                    &current_tokens,
-                                    false,
-                                    node.text_range(),
-                                ) {
-                                    pitches.push(note);
-                                }
-                                current_tokens.clear();
-                            }
-                        }
-                        _ => {}
                     }
-                }
-                if !current_tokens.is_empty() {
+                    let chain_tokens: Vec<SyntaxToken> = child
+                        .children_with_tokens()
+                        .filter_map(|nt| nt.into_token())
+                        .filter(|t| {
+                            t.kind().is_pitch()
+                                || t.kind().is_formal_pitch()
+                                || t.kind().is_identifier()
+                                || t.kind().is_at()
+                        })
+                        .collect();
+                    if chain_tokens.is_empty() {
+                        self.error(
+                            "Simple macro note must contain a pitch chain".to_string(),
+                            child.text_range(),
+                        );
+                        continue;
+                    }
                     if let Some(note) =
-                        self.parse_pitch_chain_tokens(&current_tokens, false, node.text_range())
+                        self.parse_pitch_chain_tokens(&chain_tokens, false, child.text_range())
                     {
                         pitches.push(note);
                     }
@@ -473,6 +471,41 @@ impl Compiler {
             .map(|pitch| Note::from_pitch(pitch, &self.state))
     }
 
+    fn parse_pitch_chain_ident_as_pitch(&mut self, t: &SyntaxToken) -> Option<Pitch> {
+        debug_assert!(t.kind().is_identifier());
+        let ident = t.text().to_string();
+        if let Some(notes) = self.macros.simple_macros.get(ident.as_str()) {
+            if notes.len() == 1 {
+                return Some(notes[0].pitch);
+            }
+            self.error(
+                format!(
+                    "Identifier in pitch chain must resolve to a simple macro with exactly one pitch: {}",
+                    ident
+                ),
+                t.text_range(),
+            );
+            return None;
+        }
+
+        if self.macros.complex_macros.contains_key(ident.as_str()) {
+            self.error(
+                format!(
+                    "Identifier in pitch chain cannot resolve to a complex macro: {}",
+                    ident
+                ),
+                t.text_range(),
+            );
+            return None;
+        }
+
+        self.error(
+            format!("Undefined identifier in pitch chain: {}", ident),
+            t.text_range(),
+        );
+        None
+    }
+
     fn parse_pitch_chain_tokens(
         &mut self,
         tokens: &[SyntaxToken],
@@ -491,6 +524,10 @@ impl Compiler {
             if expect_pitch {
                 if token.kind().is_pitch() || token.kind().is_formal_pitch() {
                     let pitch = self.parse_pitch_atom(token, allow_formal_single)?;
+                    pitch_atoms.push((pitch, token.text_range()));
+                    expect_pitch = false;
+                } else if token.kind().is_identifier() {
+                    let pitch = self.parse_pitch_chain_ident_as_pitch(token)?;
                     pitch_atoms.push((pitch, token.text_range()));
                     expect_pitch = false;
                 } else {
@@ -688,9 +725,18 @@ impl Compiler {
                         .children_with_tokens()
                         .filter_map(|nt| nt.into_token())
                         .filter(|t| {
-                            t.kind().is_pitch() || t.kind().is_formal_pitch() || t.kind().is_at()
+                            t.kind().is_pitch()
+                                || t.kind().is_formal_pitch()
+                                || t.kind().is_identifier()
+                                || t.kind().is_at()
                         })
                         .collect();
+                    if arg_chain_tokens
+                        .first()
+                        .is_some_and(|token| token.kind().is_identifier())
+                    {
+                        arg_chain_tokens.remove(0);
+                    }
                     if arg_chain_tokens
                         .first()
                         .is_some_and(|token| token.kind().is_at())
@@ -765,7 +811,12 @@ impl Compiler {
             let chain_tokens: Vec<SyntaxToken> = n
                 .children_with_tokens()
                 .filter_map(|nt| nt.into_token())
-                .filter(|t| t.kind().is_pitch() || t.kind().is_formal_pitch() || t.kind().is_at())
+                .filter(|t| {
+                    t.kind().is_pitch()
+                        || t.kind().is_formal_pitch()
+                        || t.kind().is_identifier()
+                        || t.kind().is_at()
+                })
                 .collect();
             if chain_tokens.is_empty() {
                 self.error(
@@ -929,6 +980,75 @@ mod tests {
             d.message
                 .contains("rest/sustain cannot be used inside pitch chain")
         }));
+    }
+
+    #[test]
+    fn compile_pitch_chain_identifier_tail_from_single_simple_macro_ok() {
+        let compiler = compile_source("m = 3/2\nC4@m,\n");
+        assert!(!has_error_diagnostics(&compiler));
+
+        let note = compiler
+            .events
+            .iter()
+            .find_map(|e| match &e.body {
+                EventBody::Note(n) => Some(*n),
+                _ => None,
+            })
+            .expect("expected one note event");
+
+        let right_freq = 261.63f32 * 1.5;
+        let expected = right_freq * 2f32.powf((60f32 - 67f32) / 12.0);
+        assert!((note.freq - expected).abs() < 0.3);
+    }
+
+    #[test]
+    fn compile_pitch_chain_identifier_tail_from_multi_simple_macro_reports_error() {
+        let compiler = compile_source("m = C4:D4\nC4@m,\n");
+        assert!(compiler.diagnostics.iter().any(|d| {
+            d.message
+                .contains("Identifier in pitch chain must resolve to a simple macro with exactly one pitch")
+        }));
+    }
+
+    #[test]
+    fn compile_pitch_chain_identifier_tail_from_complex_macro_reports_error() {
+        let compiler = compile_source("m =\nC4,\n\nC4@m,\n");
+        assert!(compiler.diagnostics.iter().any(|d| {
+            d.message
+                .contains("Identifier in pitch chain cannot resolve to a complex macro")
+        }));
+    }
+
+    #[test]
+    fn compile_macro_invoke_head_unrestricted_tail_identifier_restricted() {
+        let compiler = compile_source("m = C4:D4\nb = 3/2\nm@b,\n");
+        assert!(!has_error_diagnostics(&compiler));
+
+        let note_count = compiler
+            .events
+            .iter()
+            .filter(|e| matches!(e.body, EventBody::Note(_)))
+            .count();
+        assert_eq!(note_count, 2);
+    }
+
+    #[test]
+    fn compile_simple_macro_def_allows_pitch_chain_with_identifier() {
+        let compiler = compile_source("a = 3/2\nm = C4@a\nm,\n");
+        assert!(!has_error_diagnostics(&compiler));
+
+        let note = compiler
+            .events
+            .iter()
+            .find_map(|e| match &e.body {
+                EventBody::Note(n) => Some(*n),
+                _ => None,
+            })
+            .expect("expected one note event");
+
+        let right_freq = 261.63f32 * 1.5;
+        let expected = right_freq * 2f32.powf((60f32 - 67f32) / 12.0);
+        assert!((note.freq - expected).abs() < 0.3);
     }
 
     #[test]

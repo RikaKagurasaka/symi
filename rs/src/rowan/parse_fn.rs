@@ -145,11 +145,14 @@ fn parse_note_group(parser: &mut Parser) {
 
 fn parse_pitch_chain_tail(parser: &mut Parser) {
     while parser.eat(SyntaxKind::At) {
-        if parser.peek().is_some_and(|k| k.is_pitch()) {
+        if parser
+            .peek()
+            .is_some_and(|k| k.is_pitch() || k.is_identifier())
+        {
             parser.bump();
             continue;
         }
-        parser.error("Expected pitch token after '@'");
+        parser.error("Expected pitch token or identifier after '@'");
         break;
     }
 }
@@ -209,34 +212,39 @@ fn parse_macro_def(parser: &mut Parser) {
 }
 
 fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker) {
+    let mut note_marker = None;
     while let Some(tok) = parser.peek() {
         match tok {
-            SyntaxKind::PitchSpellOctave
-            | SyntaxKind::PitchSpellSimple
-            | SyntaxKind::PitchFrequency => {
+            SyntaxKindPitches!() => {
+                note_marker.get_or_insert_with(|| parser.start_node());
                 parser.bump(); // consume pitch token
-            }
-            SyntaxKind::PitchCents | SyntaxKind::PitchRatio | SyntaxKind::PitchEdo => {
-                parser.bump(); // consume pitch token
+                parse_pitch_chain_tail(parser);
             }
             SyntaxKind::Identifier => {
-                parser.bump(); // consume macro invocation argument
-            }
-            SyntaxKind::At => {
-                parser.bump(); // consume pitch chain connector
+                note_marker.get_or_insert_with(|| parser.start_node());
+                let mm = parser.start_node();
+                parser.bump(); // consume macro name
+                parse_pitch_chain_tail(parser);
+                mm.complete(parser, SyntaxKind::NODE_MACRO_INVOKE);
             }
             SyntaxKind::Colon => {
-                parser.bump(); // consume colon
+                note_marker
+                    .take()
+                    .map(|marker| marker.complete(parser, SyntaxKind::NODE_NOTE));
+                parser.bump(); // consume colon as note separator
             }
             SyntaxKind::Newline => {
                 break; // reach EOL
             }
             _ => {
-                parser.error("Unexpected token in simple macro definition");
+                parser.error(format!("Unexpected token {:?} in simple macro definition", tok));
                 parser.bump(); // consume to avoid infinite loop
             }
         }
     }
+    note_marker
+        .take()
+        .map(|marker| marker.complete(parser, SyntaxKind::NODE_NOTE));
     m.complete(parser, SyntaxKind::NODE_MACRODEF_SIMPLE);
 }
 
@@ -340,6 +348,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_macro_simple_def_pitch_chain_builds_note_nodes() {
+        let result = parse_source(Arc::from("a = 3/2\nfoo = C4@a:D4\n"));
+        assert!(result.errors().is_empty());
+        let root = result.syntax_node();
+        let note_count = root
+            .descendants()
+            .filter(|n| {
+                let kind: SyntaxKind = n.kind().into();
+                kind == SyntaxKind::NODE_NOTE
+            })
+            .count();
+        assert!(note_count >= 2);
+    }
+
+    #[test]
     fn parse_macro_complex_def_ok() {
         let result = parse_source(Arc::from("baz =\nC4,\n\n"));
         assert!(result.errors().is_empty());
@@ -432,6 +455,18 @@ mod tests {
                 .is_some_and(|t| t.kind() == SyntaxKind::At.into())
         });
         assert!(has_at);
+    }
+
+    #[test]
+    fn parse_pitch_chain_identifier_tail_ok() {
+        let result = parse_source(Arc::from("m = 3/2\nC4@m,\n"));
+        assert!(result.errors().is_empty());
+        let root = result.syntax_node();
+        let has_identifier = root.descendants_with_tokens().any(|nt| {
+            nt.into_token()
+                .is_some_and(|t| t.kind() == SyntaxKind::Identifier.into())
+        });
+        assert!(has_identifier);
     }
 
     #[test]
