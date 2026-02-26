@@ -148,7 +148,13 @@ fn parse_note_group(parser: &mut Parser) {
 }
 
 fn parse_pitch_chain_tail(parser: &mut Parser) {
-    while parser.eat(SyntaxKind::At) {
+    loop {
+        while parser.eat(SyntaxKind::Plus) || parser.eat(SyntaxKind::PitchSustain) {}
+
+        if !parser.eat(SyntaxKind::At) {
+            break;
+        }
+
         if parser
             .peek()
             .is_some_and(|k| k.is_pitch() || k.is_identifier())
@@ -187,14 +193,20 @@ fn parse_base_pitch(parser: &mut Parser) {
         parser.eat(SyntaxKind::PitchSpellOctave) || parser.eat(SyntaxKind::PitchSpellSimple);
     if has_spell {
         if parser.eat(SyntaxKind::Equals) {
-            if parser.peek().is_some_and(|s| s.is_pitch()) {
+            if parser.peek().is_some_and(|s| s.is_pitch() || s.is_identifier()) {
+                let chain_marker = parser.start_node();
                 parser.bump();
+                parse_pitch_chain_tail(parser);
+                chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
             } else {
                 parser.error("Expected pitch token after '=' in base pitch definition");
             }
         }
-    } else if parser.peek().is_some_and(|s| s.is_pitch()) {
+    } else if parser.peek().is_some_and(|s| s.is_pitch() || s.is_identifier()) {
+        let chain_marker = parser.start_node();
         parser.bump();
+        parse_pitch_chain_tail(parser);
+        chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
     } else {
         parser.error("Base pitch definition must contain a pitch token");
     }
@@ -209,10 +221,41 @@ fn parse_macro_def(parser: &mut Parser) {
     if parser.peek().is_some_and(|s| s.is_newline()) {
         parse_multi_line_macro_def(parser, m, false);
     } else if parser.peek().is_some_and(|s| s.is_pitch() || s.is_identifier()) {
-        parse_simple_macro_def(parser, m);
+        if parser.look_for_before(SyntaxKind::Colon, SyntaxKind::Newline) {
+            parse_simple_macro_def(parser, m);
+        } else {
+            parse_alias_macro_def(parser, m);
+        }
     } else {
         parse_multi_line_macro_def(parser, m, true);
     }
+}
+
+fn parse_alias_macro_def(parser: &mut Parser, m: super::marker::Marker) {
+    let chain_marker = parser.start_node();
+    if parser.peek().is_some_and(|s| s.is_pitch()) {
+        parser.bump();
+    } else if parser.peek().is_some_and(|s| s.is_identifier()) {
+        let mm = parser.start_node();
+        parser.bump();
+        mm.complete(parser, SyntaxKind::NODE_MACRO_INVOKE);
+    } else {
+        parser.error("Alias macro definition must start with a pitch token or identifier");
+        m.complete(parser, SyntaxKind::NODE_MACRODEF_ALIAS);
+        return;
+    }
+    parse_pitch_chain_tail(parser);
+    chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
+
+    while let Some(tok) = parser.peek() {
+        if tok == SyntaxKind::Newline {
+            break;
+        }
+        parser.error(format!("Unexpected token {:?} in alias macro definition", tok));
+        parser.bump();
+    }
+
+    m.complete(parser, SyntaxKind::NODE_MACRODEF_ALIAS);
 }
 
 fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker) {
@@ -344,13 +387,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_macro_simple_def_ok() {
+    fn parse_macro_alias_def_ok() {
         let result = parse_source(Arc::from("foo = C4\n"));
         assert!(result.errors().is_empty());
         let root = result.syntax_node();
         let def = root.children().find(|n| {
             let kind: SyntaxKind = n.kind().into();
-            kind == SyntaxKind::NODE_MACRODEF_SIMPLE
+            kind == SyntaxKind::NODE_MACRODEF_ALIAS
         });
         assert!(def.is_some());
     }
@@ -360,6 +403,11 @@ mod tests {
         let result = parse_source(Arc::from("a = 3/2\nfoo = C4@a:D4\n"));
         assert!(result.errors().is_empty());
         let root = result.syntax_node();
+        let has_simple_def = root.children().any(|n| {
+            let kind: SyntaxKind = n.kind().into();
+            kind == SyntaxKind::NODE_MACRODEF_SIMPLE
+        });
+        assert!(has_simple_def);
         let note_count = root
             .descendants()
             .filter(|n| {
@@ -407,6 +455,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_base_pitch_rhs_identifier_chain_ok() {
+        let result = parse_source(Arc::from("a = 3/2@5/4\n<C4=a>\n"));
+        assert!(result.errors().is_empty());
+        let root = result.syntax_node();
+        let has_chain = root.descendants().any(|n| {
+            let kind: SyntaxKind = n.kind().into();
+            kind == SyntaxKind::NODE_BASE_PITCH_DEF
+                && n.children().any(|c| {
+                    let ck: SyntaxKind = c.kind().into();
+                    ck == SyntaxKind::NODE_PITCH_CHAIN
+                })
+        });
+        assert!(has_chain);
+    }
+
+    #[test]
     fn parse_bpm_ok() {
         let result = parse_source(Arc::from("(120)\n"));
         assert!(result.errors().is_empty());
@@ -431,12 +495,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_macro_invoke_with_arg_reports_error() {
-        let result = parse_source(Arc::from("foo(C4),\n"));
-        assert!(!result.errors().is_empty());
-    }
-
-    #[test]
     fn parse_pitch_chain_note_ok() {
         let result = parse_source(Arc::from("C4@3/2@100c,\n"));
         assert!(result.errors().is_empty());
@@ -451,6 +509,23 @@ mod tests {
                 .is_some_and(|t| t.kind() == SyntaxKind::At.into())
         });
         assert!(has_at);
+    }
+
+    #[test]
+    fn parse_pitch_chain_suffix_plus_minus_ok() {
+        let result = parse_source(Arc::from("3/2++@4/3-,\n"));
+        assert!(result.errors().is_empty());
+        let root = result.syntax_node();
+        let has_plus = root.descendants_with_tokens().any(|nt| {
+            nt.into_token()
+                .is_some_and(|t| t.kind() == SyntaxKind::Plus.into())
+        });
+        let has_minus = root.descendants_with_tokens().any(|nt| {
+            nt.into_token()
+                .is_some_and(|t| t.kind() == SyntaxKind::PitchSustain.into())
+        });
+        assert!(has_plus);
+        assert!(has_minus);
     }
 
     #[test]
@@ -483,12 +558,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_pitch_chain_macro_arg_reports_error() {
-        let result = parse_source(Arc::from("foo(C4@5/4),\n"));
-        assert!(!result.errors().is_empty());
-    }
-
-    #[test]
     fn parse_pitch_chain_trailing_at_reports_error() {
         let result = parse_source(Arc::from("C4@,\n"));
         assert!(!result.errors().is_empty());
@@ -514,10 +583,11 @@ mod tests {
 
     #[test]
     fn parse_mixed_program_ok() {
-        let source = "foo = C4\nbar = 3/2\n<C4=440>\n(120)\n(3/4)\nC4:D4,\n";
+        let source = "foo = C4\nbar = C4:D4\n<C4=440>\n(120)\n(3/4)\nC4:D4,\n";
         let result = parse_source(Arc::from(source));
         assert!(result.errors().is_empty());
         let kinds = collect_kinds(&result.syntax_node());
+        assert!(kinds.contains(&SyntaxKind::NODE_MACRODEF_ALIAS));
         assert!(kinds.contains(&SyntaxKind::NODE_MACRODEF_SIMPLE));
         assert!(kinds.contains(&SyntaxKind::NODE_BASE_PITCH_DEF));
         assert!(kinds.contains(&SyntaxKind::NODE_BPM_DEF));

@@ -54,13 +54,17 @@ pub enum SyntaxKind {
     /// Used for pitch chain connector
     #[token("@")]
     At,
+    /// Plus '+'
+    /// Used as pitch-chain octave-up suffix
+    #[token("+")]
+    Plus,
     /// PitchSpellOctave (e.g. C#4, Db3, A5, Gb6)
     /// Octave is -9 to 19
     #[regex(r"[A-G](#|b)*(-[1-9]|1?[0-9])")]
     PitchSpellOctave,
     /// PitchSpellSimple
     /// Octave is omitted or +/-
-    #[regex(r"[A-G](#|b)*[+-]*")]
+    #[regex(r"[A-G](#|b)*")]
     PitchSpellSimple,
     /// PitchFrequency in Hz (e.g. 440.0, 261.63)
     /// Must be greater than 1, less than 1e8
@@ -84,6 +88,7 @@ pub enum SyntaxKind {
     #[regex(r"\.+", priority = 1)]
     PitchRest,
     /// PitchSustain
+    /// Also used as a suffix for minus octave in pitch chain
     #[token("-", priority = 1)]
     PitchSustain,
     /// Identifier (macro names, etc.)
@@ -113,11 +118,11 @@ pub enum SyntaxKind {
     #[token(">")]
     RAngle,
     /// LParen '('
-    /// Used for macro invocations and BPM / TimeSignature changes
+    /// Used for BPM / TimeSignature changes
     #[token("(")]
     LParen,
     /// RParen ')'
-    /// Used for macro invocations and BPM / TimeSignature changes
+    /// Used for BPM / TimeSignature changes
     #[token(")")]
     RParen,
 
@@ -125,6 +130,7 @@ pub enum SyntaxKind {
 
     // ==== Rowan Nodes ====
     NODE_ROOT,
+    NODE_MACRODEF_ALIAS,
     NODE_MACRODEF_SIMPLE,
     NODE_MACRODEF_COMPLEX,
     NODE_MACRODEF_COMPLEX_BODY,
@@ -243,6 +249,7 @@ impl SyntaxKind {
     pub fn is_node(&self) -> bool {
         match self {
             SyntaxKind::NODE_ROOT
+            | SyntaxKind::NODE_MACRODEF_ALIAS
             | SyntaxKind::NODE_MACRODEF_SIMPLE
             | SyntaxKind::NODE_MACRODEF_COMPLEX
             | SyntaxKind::NODE_MACRODEF_COMPLEX_BODY

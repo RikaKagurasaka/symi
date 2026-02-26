@@ -57,24 +57,16 @@ impl Pitch {
     }
 
     pub fn parse_spell_simple(s: &str) -> Option<Self> {
-        let regex = Regex::new(r"^([A-G])([#b]*)([+-]*)$").unwrap();
+        let regex = Regex::new(r"^([A-G])([#b]*)$").unwrap();
         if let Some(caps) = regex.captures(s) {
             let base_char = caps.get(1)?.as_str().chars().next()?;
             let accidentals = caps.get(2)?.as_str();
-            let modifiers = caps.get(3)?.as_str();
 
             let mut semitone = char_to_semitone(base_char)?;
             for acc in accidentals.chars() {
                 match acc {
                     '#' => semitone += 1,
                     'b' => semitone -= 1,
-                    _ => return None,
-                }
-            }
-            for modif in modifiers.chars() {
-                match modif {
-                    '+' => semitone += 12,
-                    '-' => semitone -= 12,
                     _ => return None,
                 }
             }
@@ -302,6 +294,7 @@ pub struct CompileEvent {
 }
 
 pub struct MacroRegistry {
+    pub alias_macros: HashMap<String, Vec<Pitch>>,
     pub simple_macros: HashMap<String, Vec<Note>>,
     pub complex_macros: HashMap<String, Vec<CompileEvent>>,
 }
@@ -335,6 +328,7 @@ impl CompileState {
 impl Default for MacroRegistry {
     fn default() -> Self {
         Self {
+            alias_macros: HashMap::new(),
             simple_macros: HashMap::new(),
             complex_macros: HashMap::new(),
         }
