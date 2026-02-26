@@ -285,14 +285,7 @@ function openLink(url: string) {
                 }}
               </p>
             </div>
-            <UButton
-              label="Github Release"
-              icon="i-lucide-external-link"
-              color="neutral"
-              variant="outline"
-              :to="data.htmlUrl"
-              target="_blank"
-            />
+   
           </div>
         </template>
 
