@@ -1,6 +1,6 @@
 use std::{
-    cell::RefCell,
-    mem::{replace, swap, take},
+    collections::HashMap,
+    mem::take,
     ops::Neg,
     vec,
 };
@@ -213,16 +213,33 @@ impl Compiler {
                     .insert(ident_tok.text().to_string(), pitches);
             }
             SyntaxKind::NODE_MACRODEF_COMPLEX => {
-                let mut state = CompileState {
+                let saved_state = CompileState {
+                    time: self.state.time,
+                    base_note: self.state.base_note,
+                    base_frequency: self.state.base_frequency,
+                    time_signature: self.state.time_signature,
+                    beat_duration: self.state.beat_duration,
+                    bpm: self.state.bpm,
+                    quantize: self.state.quantize,
+                    edo_def: self.state.edo_def,
+                };
+                let saved_events = take(&mut self.events);
+
+                self.state = CompileState {
                     time: TimeStamp {
                         seconds: 0.0,
                         bars: 0,
                         ticks: Rational32::new(0, *self.state.quantize.denom()),
                     },
-                    ..self.state
+                    base_note: saved_state.base_note,
+                    base_frequency: saved_state.base_frequency,
+                    time_signature: saved_state.time_signature,
+                    beat_duration: saved_state.beat_duration,
+                    bpm: saved_state.bpm,
+                    quantize: saved_state.quantize,
+                    edo_def: saved_state.edo_def,
                 };
-                swap(&mut self.state, &mut state);
-                let events = take(&mut self.events);
+
                 let node_body = node
                     .find_child_node_by_fn(|n| n.kind().is_node_macrodef_complex_body())
                     .expect("Macro complex definition must have a body node");
@@ -230,12 +247,14 @@ impl Compiler {
                     self.compile_normal_line(&node);
                     self.reset_ticks();
                 }
+
+                let compiled_events = take(&mut self.events);
                 self.macros.complex_macros.insert(
                     ident_tok.text().to_string(),
-                    replace(&mut self.events, events),
+                    compiled_events,
                 );
-                self.state = state;
-                self.events = take(&mut self.events);
+                self.state = saved_state;
+                self.events = saved_events;
             }
             _ => {
                 self.error(
@@ -674,33 +693,10 @@ impl Compiler {
             .filter(|nt| nt.as_token().is_some_and(|t| t.kind().is_semicolon()))
             .count()
             + 1;
-        let cur_sub_group: RefCell<Vec<CompileEvent>> = RefCell::default();
+        let mut cur_sub_group: Vec<CompileEvent> = Vec::new();
         // temporarily set quantize to sub-group duration
         self.state.quantize =
             self.state.quantize / Rational32::from_integer(sub_group_count as i32);
-        // closure to submit current sub-group
-        let submit_note_group = |mut _self: &mut Compiler| {
-            // fill durations for notes in current sub-group
-            let mut cur_dur = _self.state.quantize;
-            for note in cur_sub_group.borrow_mut().iter_mut().rev() {
-                if let EventBody::Note(n) = &mut note.body {
-                    if n.duration.is_zero() {
-                        n.set_duration(cur_dur, &_self.state);
-                    } else {
-                        cur_dur = n.duration;
-                    }
-                }
-            }
-            // push notes to events
-            for note in cur_sub_group.borrow_mut().drain(..) {
-                _self.push_event(note.body, note.range);
-            }
-            // advance time by quantize
-            _self.state.time = _self
-                .state
-                .time
-                .add_duration(_self.state.quantize, &_self.state);
-        };
 
         for nt in tokens {
             match nt {
@@ -708,7 +704,7 @@ impl Compiler {
                     SyntaxKind::NODE_NOTE => {
                         if let Some(notes) = self.parse_note(&n) {
                             for note in notes.into_iter() {
-                                cur_sub_group.borrow_mut().push(CompileEvent {
+                                cur_sub_group.push(CompileEvent {
                                     body: EventBody::Note(note),
                                     start_time: self.state.time.clone(),
                                     range: n.text_range(),
@@ -725,7 +721,7 @@ impl Compiler {
                     }
                 },
                 NodeOrToken::Token(t) => match t.kind() {
-                    SyntaxKind::Semicolon => submit_note_group(self),
+                    SyntaxKind::Semicolon => self.submit_note_sub_group(&mut cur_sub_group),
                     SyntaxKind::Colon => {
                         // do nothing, just a separator
                     }
@@ -737,7 +733,7 @@ impl Compiler {
             }
         }
         // submit last sub-group
-        submit_note_group(self);
+        self.submit_note_sub_group(&mut cur_sub_group);
         // restore quantize and timestamp
         self.state.quantize =
             self.state.quantize * Rational32::from_integer(sub_group_count as i32);
@@ -757,6 +753,28 @@ impl Compiler {
                 self.state.time = self.state.time.add_duration(advance_dur, &self.state);
             }
         }
+    }
+
+    fn submit_note_sub_group(&mut self, cur_sub_group: &mut Vec<CompileEvent>) {
+        let mut cur_dur = self.state.quantize;
+        for note in cur_sub_group.iter_mut().rev() {
+            if let EventBody::Note(n) = &mut note.body {
+                if n.duration.is_zero() {
+                    n.set_duration(cur_dur, &self.state);
+                } else {
+                    cur_dur = n.duration;
+                }
+            }
+        }
+
+        for note in cur_sub_group.drain(..) {
+            self.push_event(note.body, note.range);
+        }
+
+        self.state.time = self
+            .state
+            .time
+            .add_duration(self.state.quantize, &self.state);
     }
 
     fn parse_note(&mut self, n: &SyntaxNode) -> Option<Vec<Note>> {
@@ -812,23 +830,19 @@ impl Compiler {
                     {
                         arg_chain_tokens.remove(0);
                     }
-                    let arg_pitch_tokens = self.parse_pitch_chain_tokens(
-                        &arg_chain_tokens,
-                        false,
-                        node.text_range(),
-                    );
-                    let mut new_base_pitch = arg_pitch_tokens
-                        .as_ref()
-                        .map(|n| (freq2spell(n.freq, &self.state), n.freq));
-                    if let Some((anchor_base_note, anchor_base_freq)) = new_base_pitch {
-                        let old_base_pitch = (self.state.base_note, self.state.base_frequency);
-                        self.state.base_note = anchor_base_note;
-                        self.state.base_frequency = anchor_base_freq;
-                        new_base_pitch = Some(old_base_pitch);
-                    }
-                    if let Some(macro_notes) = self.macros.simple_macros.get(ident.as_str()) {
+                    let anchor_pitch_chain = self
+                        .parse_pitch_chain_tokens(&arg_chain_tokens, false, node.text_range())
+                        .map(|n| n.pitch_chain);
+                    if let Some(macro_notes) =
+                        self.macros.simple_macros.get(ident.as_str()).cloned()
+                    {
                         // !!!Simple macro invoke!!!
-                        for mut note in macro_notes.to_vec() {
+                        for mut note in macro_notes {
+                            if let Some(anchor_chain) = &anchor_pitch_chain {
+                                if !note.is_rest() && !note.is_sustain() {
+                                    note.pitch_chain.extend(anchor_chain.iter().copied());
+                                }
+                            }
                             if let Some(note_live) =
                                 self.eval_pitch_chain_pitches(&note.pitch_chain, node.text_range())
                             {
@@ -840,12 +854,17 @@ impl Compiler {
                             notes.push(note);
                         }
                     } else if let Some(macro_events) =
-                        self.macros.complex_macros.get(ident.as_str())
+                        self.macros.complex_macros.get(ident.as_str()).cloned()
                     {
                         // !!!Complex macro invoke!!!
                         // Directly push events and return empty notes
-                        for e in macro_events.to_vec().into_iter() {
+                        for e in macro_events {
                             if let EventBody::Note(mut note) = e.body {
+                                if let Some(anchor_chain) = &anchor_pitch_chain {
+                                    if !note.is_rest() && !note.is_sustain() {
+                                        note.pitch_chain.extend(anchor_chain.iter().copied());
+                                    }
+                                }
                                 if let Some(note_live) =
                                     self.eval_pitch_chain_pitches(&note.pitch_chain, n.text_range())
                                 {
@@ -871,10 +890,6 @@ impl Compiler {
                             format!("Undefined macro invoked: {}", ident),
                             node.text_range(),
                         );
-                    }
-                    if let Some((old_base_note, old_base_freq)) = new_base_pitch {
-                        self.state.base_note = old_base_note;
-                        self.state.base_frequency = old_base_freq;
                     }
                 }
                 _ => {
@@ -936,13 +951,14 @@ impl Compiler {
     }
 
     fn finalize_sustain_notes(&mut self) {
-        // 不对 events 排序：直接在全量事件中匹配 sustain
-        // 对每个 sustain note：寻找“结束时间 == sustain.start_time”的候选音符
-        // 在允许误差 1e-4 内选择最接近者（并优先选择 start_time 更晚的音符）
-        // 然后将 sustain 的 duration 加到该音符上
         let tolerance = 1e-4;
+        let bucket_size = tolerance;
+        let to_bucket = |sec: f64| -> i64 { (sec / bucket_size).round() as i64 };
+
         let mut sustain_infos = Vec::new();
-        for event in &self.events {
+        let mut end_buckets: HashMap<i64, Vec<usize>> = HashMap::new();
+
+        for (idx, event) in self.events.iter().enumerate() {
             if let EventBody::Note(note) = &event.body {
                 if note.is_sustain() {
                     sustain_infos.push((
@@ -951,25 +967,53 @@ impl Compiler {
                         note.duration,
                         event.range,
                     ));
+                } else {
+                    let end = event.start_time.seconds + note.duration_seconds;
+                    end_buckets.entry(to_bucket(end)).or_default().push(idx);
                 }
             }
         }
 
         for (sustain_start, sustain_dur_sec, sustain_dur, sustain_range) in sustain_infos {
             let mut matched = false;
-            for event in self.events.iter_mut() {
-                if let EventBody::Note(note) = &mut event.body {
-                    if note.is_sustain() {
-                        continue;
-                    }
-                    let end = event.start_time.seconds + note.duration_seconds;
-                    if (end - sustain_start).abs() < tolerance {
-                        note.duration += sustain_dur;
-                        note.duration_seconds += sustain_dur_sec;
-                        matched = true;
-                    }
+
+            let center_bucket = to_bucket(sustain_start);
+            let mut candidate_indices = Vec::new();
+            for key in [center_bucket - 1, center_bucket, center_bucket + 1] {
+                if let Some(indices) = end_buckets.get(&key) {
+                    candidate_indices.extend(indices.iter().copied());
                 }
             }
+
+            for idx in candidate_indices {
+                let old_end = match &self.events[idx].body {
+                    EventBody::Note(note) if !note.is_sustain() => {
+                        self.events[idx].start_time.seconds + note.duration_seconds
+                    }
+                    _ => continue,
+                };
+
+                if (old_end - sustain_start).abs() < tolerance {
+                    if let EventBody::Note(note) = &mut self.events[idx].body {
+                        note.duration += sustain_dur;
+                        note.duration_seconds += sustain_dur_sec;
+                    }
+
+                    let new_end = old_end + sustain_dur_sec;
+                    let old_bucket = to_bucket(old_end);
+                    let new_bucket = to_bucket(new_end);
+                    if old_bucket != new_bucket {
+                        if let Some(indices) = end_buckets.get_mut(&old_bucket) {
+                            if let Some(pos) = indices.iter().position(|&i| i == idx) {
+                                indices.swap_remove(pos);
+                            }
+                        }
+                        end_buckets.entry(new_bucket).or_default().push(idx);
+                    }
+                    matched = true;
+                }
+            }
+
             if !matched {
                 self.warn(
                     "Sustain note has no matching preceding note".to_string(),
@@ -1189,6 +1233,30 @@ mod tests {
 
         let expected = 293.66f32 * 1.5;
         assert!((note.freq - expected).abs() < 0.3);
+    }
+
+    #[test]
+    fn compile_simple_macro_anchor_appends_pitch_chain() {
+        let direct = compile_source("3/2@D4,\n");
+        let from_macro = compile_source("m = 3/2\nm@D4,\n");
+        assert!(!has_error_diagnostics(&direct));
+        assert!(!has_error_diagnostics(&from_macro));
+
+        let direct_freq = first_note_freq(&direct);
+        let macro_freq = first_note_freq(&from_macro);
+        assert!((direct_freq - macro_freq).abs() < 1e-3);
+    }
+
+    #[test]
+    fn compile_complex_macro_anchor_appends_pitch_chain() {
+        let direct = compile_source("3/2@D4,\n");
+        let from_macro = compile_source("m =\n3/2,\n\nm@D4,\n");
+        assert!(!has_error_diagnostics(&direct));
+        assert!(!has_error_diagnostics(&from_macro));
+
+        let direct_freq = first_note_freq(&direct);
+        let macro_freq = first_note_freq(&from_macro);
+        assert!((direct_freq - macro_freq).abs() < 1e-3);
     }
 
     #[test]

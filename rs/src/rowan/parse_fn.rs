@@ -208,7 +208,7 @@ fn parse_macro_def(parser: &mut Parser) {
     parser.expect(SyntaxKind::Equals); // consume '='
     if parser.peek().is_some_and(|s| s.is_newline()) {
         parse_multi_line_macro_def(parser, m, false);
-    } else if parser.peek().is_some_and(|s| s.is_pitch()) {
+    } else if parser.peek().is_some_and(|s| s.is_pitch() || s.is_identifier()) {
         parse_simple_macro_def(parser, m);
     } else {
         parse_multi_line_macro_def(parser, m, true);
