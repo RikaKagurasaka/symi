@@ -6,6 +6,7 @@ use rowan::TextRange;
 use strum::Display;
 
 pub type PitchSpell = i16; // note: 0=C-1, 1=C#-1, ..., 60=C4, ... 
+pub type PitchChain = Vec<Pitch>;
 
 #[derive(Debug, Display, Clone, Copy, PartialEq)]
 pub enum Pitch {
@@ -168,9 +169,9 @@ impl TimeStamp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Note {
-    pub pitch: Pitch,
+    pub pitch_chain: PitchChain,
     pub freq: f32,
     pub duration: Rational32,
     pub duration_seconds: f64,
@@ -212,7 +213,7 @@ impl Note {
             Pitch::Rest | Pitch::Sustain => 0.0,
         };
         Self {
-            pitch,
+            pitch_chain: vec![pitch],
             freq,
             duration: Rational32::new(0, 4),
             duration_seconds: 0.0,
@@ -242,7 +243,7 @@ impl Note {
             Pitch::Rest | Pitch::Sustain => 0.0,
         };
         Note {
-            pitch,
+            pitch_chain: vec![pitch],
             freq,
             duration: Rational32::new(0, 4),
             duration_seconds: 0.0,
@@ -265,6 +266,19 @@ impl Note {
     pub fn set_duration(&mut self, duration: Rational32, state: &CompileState) {
         self.duration = duration;
         self.duration_seconds = TimeStamp::dur_in_sec(duration, state);
+    }
+
+    pub fn with_pitch_chain(mut self, pitch_chain: PitchChain) -> Self {
+        self.pitch_chain = pitch_chain;
+        self
+    }
+
+    pub fn is_rest(&self) -> bool {
+        self.pitch_chain.len() == 1 && matches!(self.pitch_chain[0], Pitch::Rest)
+    }
+
+    pub fn is_sustain(&self) -> bool {
+        self.pitch_chain.len() == 1 && matches!(self.pitch_chain[0], Pitch::Sustain)
     }
 }
 

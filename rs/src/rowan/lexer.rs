@@ -132,6 +132,7 @@ pub enum SyntaxKind {
     NODE_NORMAL_LINE,
     NODE_NOTE_GROUP,
     NODE_NOTE,
+    NODE_PITCH_CHAIN,
     NODE_MACRO_INVOKE,
     NODE_BASE_PITCH_DEF,
     NODE_BPM_DEF,
@@ -249,6 +250,7 @@ impl SyntaxKind {
             | SyntaxKind::NODE_NORMAL_LINE
             | SyntaxKind::NODE_NOTE_GROUP
             | SyntaxKind::NODE_NOTE
+            | SyntaxKind::NODE_PITCH_CHAIN
             | SyntaxKind::NODE_MACRO_INVOKE
             | SyntaxKind::NODE_BASE_PITCH_DEF
             | SyntaxKind::NODE_BPM_DEF

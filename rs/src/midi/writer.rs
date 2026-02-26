@@ -35,7 +35,7 @@ use midly::{
 
 use crate::compiler::{
     rational::Rational32,
-    types::{CompileEvent, EventBody, Note, Pitch},
+    types::{CompileEvent, EventBody, Note},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -292,10 +292,10 @@ fn rational_to_f64(v: Rational32) -> Result<f64> {
 fn collect_note_specs(events: &[CompileEvent], bend_range: u16) -> Result<Vec<NoteSpec>> {
     let mut notes = Vec::new();
     for event in events {
-        let EventBody::Note(note) = event.body else {
+        let EventBody::Note(note) = &event.body else {
             continue;
         };
-        if matches!(note.pitch, Pitch::Rest) {
+        if note.is_rest() {
             continue;
         }
         let spec = note_to_spec(event.start_time.seconds, note, bend_range)?;
@@ -306,7 +306,7 @@ fn collect_note_specs(events: &[CompileEvent], bend_range: u16) -> Result<Vec<No
     Ok(notes)
 }
 
-fn note_to_spec(start_second: f64, note: Note, bend_range: u16) -> Result<NoteSpec> {
+fn note_to_spec(start_second: f64, note: &Note, bend_range: u16) -> Result<NoteSpec> {
     if note.freq <= 0.0 {
         bail!("Note frequency must be > 0 for MIDI export");
     }

@@ -173,27 +173,39 @@ impl Compiler {
                     if !child.kind().is_node_note() {
                         continue;
                     }
-                    let chain_tokens: Vec<SyntaxToken> = child
-                        .children_with_tokens()
-                        .filter_map(|nt| nt.into_token())
-                        .filter(|t| {
-                            t.kind().is_pitch()
-                                || t.kind().is_formal_pitch()
-                                || t.kind().is_identifier()
-                                || t.kind().is_at()
-                        })
-                        .collect();
-                    if chain_tokens.is_empty() {
+                    let mut has_chain = false;
+                    for chain in child.children().filter(|n| n.kind().is_node_pitch_chain()) {
+                        has_chain = true;
+                        let chain_tokens: Vec<SyntaxToken> = chain
+                            .descendants_with_tokens()
+                            .filter_map(|nt| nt.into_token())
+                            .filter(|t| {
+                                t.kind().is_pitch()
+                                    || t.kind().is_formal_pitch()
+                                    || t.kind().is_identifier()
+                                    || t.kind().is_at()
+                            })
+                            .collect();
+                        if chain_tokens.is_empty() {
+                            self.error(
+                                "Simple macro note must contain a pitch chain".to_string(),
+                                chain.text_range(),
+                            );
+                            continue;
+                        }
+                        if let Some(note) = self.parse_pitch_chain_tokens(
+                            &chain_tokens,
+                            false,
+                            chain.text_range(),
+                        ) {
+                            pitches.push(note);
+                        }
+                    }
+                    if !has_chain {
                         self.error(
                             "Simple macro note must contain a pitch chain".to_string(),
                             child.text_range(),
                         );
-                        continue;
-                    }
-                    if let Some(note) =
-                        self.parse_pitch_chain_tokens(&chain_tokens, false, child.text_range())
-                    {
-                        pitches.push(note);
                     }
                 }
                 self.macros
@@ -384,9 +396,9 @@ impl Compiler {
         };
 
         if let Some(spell) = pitch_spell {
-            self.state.base_note = match spell.pitch {
-                Pitch::SpellOctave(s) => s,
-                Pitch::SpellSimple(s) => s,
+            self.state.base_note = match spell.pitch_chain.first().copied() {
+                Some(Pitch::SpellOctave(s)) => s,
+                Some(Pitch::SpellSimple(s)) => s,
                 _ => unreachable!("Base pitch must be a spell"),
             };
             self.state.base_frequency = pitch_ref.map(|p| p.freq).unwrap_or(spell.freq);
@@ -476,11 +488,21 @@ impl Compiler {
         let ident = t.text().to_string();
         if let Some(notes) = self.macros.simple_macros.get(ident.as_str()) {
             if notes.len() == 1 {
-                return Some(notes[0].pitch);
+                if notes[0].pitch_chain.len() == 1 {
+                    return Some(notes[0].pitch_chain[0]);
+                }
+                self.error(
+                    format!(
+                        "Identifier in pitch chain must resolve to a simple macro with exactly one pitch atom: {}",
+                        ident
+                    ),
+                    t.text_range(),
+                );
+                return None;
             }
             self.error(
                 format!(
-                    "Identifier in pitch chain must resolve to a simple macro with exactly one pitch: {}",
+                    "Identifier in pitch chain must resolve to a simple macro with exactly one note: {}",
                     ident
                 ),
                 t.text_range(),
@@ -567,7 +589,9 @@ impl Compiler {
         }
 
         if pitch_atoms.len() == 1 {
-            return Some(Note::from_pitch(pitch_atoms[0].0, &self.state));
+            return Some(Note::from_pitch(pitch_atoms[0].0, &self.state).with_pitch_chain(vec![
+                pitch_atoms[0].0,
+            ]));
         }
 
         let right = *pitch_atoms.last().expect("non-empty pitch atoms");
@@ -589,7 +613,52 @@ impl Compiler {
             );
         }
 
-        Some(current_note)
+        Some(current_note.with_pitch_chain(
+            pitch_atoms.iter().map(|(p, _)| *p).collect(),
+        ))
+    }
+
+    fn eval_pitch_chain_pitches(&mut self, pitch_atoms: &[Pitch], range: TextRange) -> Option<Note> {
+        if pitch_atoms.is_empty() {
+            return None;
+        }
+        if pitch_atoms.len() > 1
+            && pitch_atoms
+                .iter()
+                .any(|p| matches!(p, Pitch::Rest | Pitch::Sustain))
+        {
+            self.error(
+                "rest/sustain cannot be used inside pitch chain".to_string(),
+                range,
+            );
+            return None;
+        }
+        if pitch_atoms.len() == 1 {
+            return Some(Note::from_pitch(pitch_atoms[0], &self.state).with_pitch_chain(vec![
+                pitch_atoms[0],
+            ]));
+        }
+
+        let right = *pitch_atoms.last().expect("non-empty pitch atoms");
+        let mut current_note = Note::from_pitch(right, &self.state);
+        let mut current_base = (
+            Note::base_note_from_pitch(
+                right,
+                current_note.freq,
+                (self.state.base_note, self.state.base_frequency),
+            ),
+            current_note.freq,
+        );
+
+        for pitch in pitch_atoms[..pitch_atoms.len() - 1].iter().rev() {
+            current_note = Note::note_from_pitch_with_base(*pitch, current_base.0, current_base.1);
+            current_base = (
+                Note::base_note_from_pitch(*pitch, current_note.freq, current_base),
+                current_note.freq,
+            );
+        }
+
+        Some(current_note.with_pitch_chain(pitch_atoms.to_vec()))
     }
 
     fn compile_note_group(&mut self, n: &SyntaxNode) {
@@ -710,7 +779,7 @@ impl Compiler {
         let mut notes: Vec<Note> = Vec::new();
 
         if let Some(node) = n
-            .children()
+            .descendants()
             .find(|child| child.kind().is_node_macro_invoke())
         {
             match node.kind() {
@@ -760,9 +829,12 @@ impl Compiler {
                     if let Some(macro_notes) = self.macros.simple_macros.get(ident.as_str()) {
                         // !!!Simple macro invoke!!!
                         for mut note in macro_notes.to_vec() {
-                            let note_live = Note::from_pitch(note.pitch, &self.state);
-                            note.freq = note_live.freq;
-                            note.pitch_ratio = note_live.pitch_ratio;
+                            if let Some(note_live) =
+                                self.eval_pitch_chain_pitches(&note.pitch_chain, node.text_range())
+                            {
+                                note.freq = note_live.freq;
+                                note.pitch_ratio = note_live.pitch_ratio;
+                            }
                             note.duration = duration;
                             note.duration_seconds = TimeStamp::dur_in_sec(duration, &self.state);
                             notes.push(note);
@@ -774,7 +846,12 @@ impl Compiler {
                         // Directly push events and return empty notes
                         for e in macro_events.to_vec().into_iter() {
                             if let EventBody::Note(mut note) = e.body {
-                                note.freq = Note::from_pitch(note.pitch.clone(), &self.state).freq;
+                                if let Some(note_live) =
+                                    self.eval_pitch_chain_pitches(&note.pitch_chain, n.text_range())
+                                {
+                                    note.freq = note_live.freq;
+                                    note.pitch_ratio = note_live.pitch_ratio;
+                                }
                                 let start_time = TimeStamp {
                                     seconds: self.state.time.seconds + e.start_time.seconds,
                                     bars: self.state.time.bars + e.start_time.bars,
@@ -808,8 +885,18 @@ impl Compiler {
                 }
             }
         } else {
-            let chain_tokens: Vec<SyntaxToken> = n
-                .children_with_tokens()
+            let Some(chain_node) = n
+                .children()
+                .find(|child| child.kind().is_node_pitch_chain())
+            else {
+                self.error(
+                    "Note must have a pitch chain node".to_string(),
+                    n.text_range(),
+                );
+                return None;
+            };
+            let chain_tokens: Vec<SyntaxToken> = chain_node
+                .descendants_with_tokens()
                 .filter_map(|nt| nt.into_token())
                 .filter(|t| {
                     t.kind().is_pitch()
@@ -821,12 +908,12 @@ impl Compiler {
             if chain_tokens.is_empty() {
                 self.error(
                     "Note must have a pitch token or macro invoke node".to_string(),
-                    n.text_range(),
+                    chain_node.text_range(),
                 );
                 return None;
             }
             if let Some(mut note) =
-                self.parse_pitch_chain_tokens(&chain_tokens, true, n.text_range())
+                self.parse_pitch_chain_tokens(&chain_tokens, true, chain_node.text_range())
             {
                 note.set_duration(duration, &self.state);
                 notes.push(note);
@@ -857,7 +944,7 @@ impl Compiler {
         let mut sustain_infos = Vec::new();
         for event in &self.events {
             if let EventBody::Note(note) = &event.body {
-                if note.pitch == Pitch::Sustain {
+                if note.is_sustain() {
                     sustain_infos.push((
                         event.start_time.seconds,
                         note.duration_seconds,
@@ -872,7 +959,7 @@ impl Compiler {
             let mut matched = false;
             for event in self.events.iter_mut() {
                 if let EventBody::Note(note) = &mut event.body {
-                    if note.pitch == Pitch::Sustain {
+                    if note.is_sustain() {
                         continue;
                     }
                     let end = event.start_time.seconds + note.duration_seconds;
@@ -892,7 +979,7 @@ impl Compiler {
         }
         self.events.retain(|e| {
             if let EventBody::Note(n) = &e.body {
-                n.pitch != Pitch::Sustain
+                !n.is_sustain()
             } else {
                 true
             }
@@ -954,6 +1041,17 @@ mod tests {
             .any(|d| matches!(d.level, DiagnosticLevel::Error))
     }
 
+    fn first_note_freq(compiler: &Compiler) -> f32 {
+        compiler
+            .events
+            .iter()
+            .find_map(|e| match &e.body {
+                EventBody::Note(n) => Some(n.freq),
+                _ => None,
+            })
+            .expect("expected one note event")
+    }
+
     #[test]
     fn compile_pitch_chain_right_to_left() {
         let compiler = compile_source("C4@3/2,\n");
@@ -963,7 +1061,7 @@ mod tests {
             .events
             .iter()
             .find_map(|e| match &e.body {
-                EventBody::Note(n) => Some(*n),
+                EventBody::Note(n) => Some(n.clone()),
                 _ => None,
             })
             .expect("expected one note event");
@@ -991,7 +1089,7 @@ mod tests {
             .events
             .iter()
             .find_map(|e| match &e.body {
-                EventBody::Note(n) => Some(*n),
+                EventBody::Note(n) => Some(n.clone()),
                 _ => None,
             })
             .expect("expected one note event");
@@ -1006,7 +1104,7 @@ mod tests {
         let compiler = compile_source("m = C4:D4\nC4@m,\n");
         assert!(compiler.diagnostics.iter().any(|d| {
             d.message
-                .contains("Identifier in pitch chain must resolve to a simple macro with exactly one pitch")
+                .contains("Identifier in pitch chain must resolve to a simple macro with exactly one note")
         }));
     }
 
@@ -1041,7 +1139,7 @@ mod tests {
             .events
             .iter()
             .find_map(|e| match &e.body {
-                EventBody::Note(n) => Some(*n),
+                EventBody::Note(n) => Some(n.clone()),
                 _ => None,
             })
             .expect("expected one note event");
@@ -1066,7 +1164,7 @@ mod tests {
             .events
             .iter()
             .find_map(|e| match &e.body {
-                EventBody::Note(n) => Some(*n),
+                EventBody::Note(n) => Some(n.clone()),
                 _ => None,
             })
             .expect("expected one note event");
@@ -1084,13 +1182,37 @@ mod tests {
             .events
             .iter()
             .find_map(|e| match &e.body {
-                EventBody::Note(n) => Some(*n),
+                EventBody::Note(n) => Some(n.clone()),
                 _ => None,
             })
             .expect("expected one note event");
 
         let expected = 293.66f32 * 1.5;
         assert!((note.freq - expected).abs() < 0.3);
+    }
+
+    #[test]
+    fn compile_simple_macro_preserves_pitch_chain_semantics() {
+        let direct = compile_source("4/5@3/2,\n");
+        let from_macro = compile_source("m = 4/5@3/2\nm,\n");
+        assert!(!has_error_diagnostics(&direct));
+        assert!(!has_error_diagnostics(&from_macro));
+
+        let direct_freq = first_note_freq(&direct);
+        let macro_freq = first_note_freq(&from_macro);
+        assert!((direct_freq - macro_freq).abs() < 1e-3);
+    }
+
+    #[test]
+    fn compile_complex_macro_preserves_pitch_chain_semantics() {
+        let direct = compile_source("4/5@3/2,\n");
+        let from_macro = compile_source("m =\n4/5@3/2,\n\nm,\n");
+        assert!(!has_error_diagnostics(&direct));
+        assert!(!has_error_diagnostics(&from_macro));
+
+        let direct_freq = first_note_freq(&direct);
+        let macro_freq = first_note_freq(&from_macro);
+        assert!((direct_freq - macro_freq).abs() < 1e-3);
     }
 
     #[test]

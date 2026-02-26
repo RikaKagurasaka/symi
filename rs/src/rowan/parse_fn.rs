@@ -102,15 +102,19 @@ fn parse_note_group(parser: &mut Parser) {
         match tok {
             SyntaxKindPitches!() => {
                 note_marker.get_or_insert_with(|| parser.start_node());
+                let chain_marker = parser.start_node();
                 parser.bump(); // consume pitch token
                 parse_pitch_chain_tail(parser);
+                chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
             }
             SyntaxKind::Identifier => {
                 note_marker.get_or_insert_with(|| parser.start_node());
+                let chain_marker = parser.start_node();
                 let mm = parser.start_node();
                 parser.bump(); // consume macro name
                 parse_pitch_chain_tail(parser);
                 mm.complete(parser, SyntaxKind::NODE_MACRO_INVOKE);
+                chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
             }
             SyntaxKind::Colon | SyntaxKind::Semicolon => {
                 is_group = true;
@@ -217,15 +221,19 @@ fn parse_simple_macro_def(parser: &mut Parser, m: super::marker::Marker) {
         match tok {
             SyntaxKindPitches!() => {
                 note_marker.get_or_insert_with(|| parser.start_node());
+                let chain_marker = parser.start_node();
                 parser.bump(); // consume pitch token
                 parse_pitch_chain_tail(parser);
+                chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
             }
             SyntaxKind::Identifier => {
                 note_marker.get_or_insert_with(|| parser.start_node());
+                let chain_marker = parser.start_node();
                 let mm = parser.start_node();
                 parser.bump(); // consume macro name
                 parse_pitch_chain_tail(parser);
                 mm.complete(parser, SyntaxKind::NODE_MACRO_INVOKE);
+                chain_marker.complete(parser, SyntaxKind::NODE_PITCH_CHAIN);
             }
             SyntaxKind::Colon => {
                 note_marker
@@ -433,6 +441,11 @@ mod tests {
         let result = parse_source(Arc::from("C4@3/2@100c,\n"));
         assert!(result.errors().is_empty());
         let root = result.syntax_node();
+        let has_chain_node = root.descendants().any(|n| {
+            let kind: SyntaxKind = n.kind().into();
+            kind == SyntaxKind::NODE_PITCH_CHAIN
+        });
+        assert!(has_chain_node);
         let has_at = root.descendants_with_tokens().any(|nt| {
             nt.into_token()
                 .is_some_and(|t| t.kind() == SyntaxKind::At.into())
