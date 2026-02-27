@@ -37,7 +37,7 @@ export default defineNuxtConfig({
     asyncContext: true
   },
 
-  compatibilityDate: '2024-07-11',
+  compatibilityDate: '2025-07-11',
 
   devServer: {
     port: 3462
