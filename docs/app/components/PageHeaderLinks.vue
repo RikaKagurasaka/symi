@@ -4,9 +4,12 @@ import { useClipboard } from '@vueuse/core'
 const route = useRoute()
 const toast = useToast()
 const { copy, copied } = useClipboard()
-const site = useSiteConfig()
+const runtimeConfig = useRuntimeConfig()
+const requestURL = useRequestURL()
 
-const mdPath = computed(() => `${site.url}/raw${route.path}.md`)
+const siteUrl = computed(() => runtimeConfig.public.siteUrl || requestURL.origin || 'https://symi.rika.link')
+
+const mdPath = computed(() => `${siteUrl.value}/raw${route.path}.md`)
 
 const items = [
   {

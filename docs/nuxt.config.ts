@@ -3,6 +3,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     githubToken: process.env.GITHUB_TOKEN,
     public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://symi.rika.link',
       githubRepo: process.env.NUXT_PUBLIC_GITHUB_REPO || 'RikaKagurasaka/symi'
     }
   },
