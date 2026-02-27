@@ -21,11 +21,8 @@ OUTPUT: Returns a structured list with:
 - url: Full URL for reference`,
   cache: '1h',
   handler: async () => {
-    const event = useEvent()
-    const url = getRequestURL(event)
-    const siteUrl = import.meta.dev ? `${url.protocol}//${url.hostname}:${url.port}` : url.origin
-
     try {
+      const event = useEvent()
       const pages = await queryCollection(event, 'docs')
         .select('title', 'path', 'description')
         .all()
@@ -34,15 +31,17 @@ OUTPUT: Returns a structured list with:
         title: page.title,
         path: page.path,
         description: page.description,
-        url: `${siteUrl}${page.path}`
+        url: page.path
       }))
 
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
       }
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('list-pages error:', errorMessage)
       return {
-        content: [{ type: 'text', text: 'Failed to list pages' }],
+        content: [{ type: 'text', text: `Failed to list pages: ${errorMessage}` }],
         isError: true
       }
     }

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { queryCollection } from '@nuxt/content/server'
+import { Collections } from '@nuxt/content'
+import { stringify } from 'minimark/stringify'
 
 export default defineMcpTool({
   description: `Retrieves the full content and details of a specific documentation page.
@@ -17,15 +19,12 @@ WORKFLOW: This tool returns the complete page content including title, descripti
     path: z.string().describe('The page path from list-pages or provided by the user (e.g., /getting-started/installation)')
   },
   cache: '1h',
-  handler: async ({ path }) => {
-    const event = useEvent()
-    const url = getRequestURL(event)
-    const siteUrl = import.meta.dev ? `${url.protocol}//${url.hostname}:${url.port}` : url.origin
-
+  handler: async ({ path: urlPath }) => {
     try {
-      const page = await queryCollection(event, 'docs')
-        .where('path', '=', path)
-        .select('title', 'path', 'description')
+      const event = useEvent()
+      const page = await queryCollection(event, 'docs' as keyof Collections)
+        .where('path', '=', urlPath)
+        .select('title', 'path', 'description', 'body')
         .first()
 
       if (!page) {
@@ -35,24 +34,22 @@ WORKFLOW: This tool returns the complete page content including title, descripti
         }
       }
 
-      const content = await $fetch<string>(`/raw${path}.md`, {
-        baseURL: siteUrl
-      })
-
       const result = {
-        title: page.title,
-        path: page.path,
-        description: page.description,
-        content,
-        url: `${siteUrl}${page.path}`
+        title: page.title || 'Untitled',
+        path: urlPath,
+        description: page.description || '',
+        content:  stringify({ ...page.body, type: 'minimark' }, { format: 'markdown/html' }) || '',
+        url: `/docs${urlPath}`
       }
 
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
       }
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('get-page error:', errorMessage)
       return {
-        content: [{ type: 'text', text: 'Failed to get page' }],
+        content: [{ type: 'text', text: `Failed to get page: ${errorMessage}` }],
         isError: true
       }
     }
