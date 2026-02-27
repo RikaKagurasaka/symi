@@ -13,7 +13,6 @@ export default defineNuxtConfig({
     '@nuxt/image',
     '@nuxt/ui',
     '@nuxt/content',
-    'nuxt-og-image',
     'nuxt-llms',
   ],
 
