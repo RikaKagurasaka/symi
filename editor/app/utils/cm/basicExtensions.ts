@@ -4,6 +4,7 @@ import { bracketMatching, foldKeymap, indentOnInput } from "@codemirror/language
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import {
+  EditorView,
   drawSelection,
   dropCursor,
   highlightActiveLine,
@@ -15,6 +16,7 @@ import {
 export function createBasicEditorExtensions(): Extension[] {
   return [
     EditorState.allowMultipleSelections.of(true),
+    EditorView.clickAddsSelectionRange.of((event) => event.altKey && event.button === 0),
     highlightSpecialChars(),
     history(),
     drawSelection(),

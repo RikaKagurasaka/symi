@@ -4071,7 +4071,7 @@ dependencies = [
 
 [[package]]
 name = "symi-editor"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4091,7 +4091,7 @@ dependencies = [
 
 [[package]]
 name = "symi-rs"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "cpal",

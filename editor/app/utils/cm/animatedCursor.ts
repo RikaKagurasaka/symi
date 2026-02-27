@@ -24,19 +24,24 @@ export function createAnimatedCursorTheme(): Extension {
             pointerEvents: "none",
             zIndex: "10",
         },
+        ".cm-symi-ghost-cursor-primary": {
+            boxShadow: "0 0 1px 1px lime",
+            opacity: "1",
+        },
+        ".cm-symi-ghost-cursor-secondary": {
+            boxShadow: "0 0 1px 1px darklime",
+            opacity: "0.7",
+        },
     });
 }
 
 export function createAnimatedCursor(): Extension {
     return ViewPlugin.fromClass(class {
-        private cursorEl: HTMLDivElement;
-        private lastPos: number | null = null;
+        private cursorEls: HTMLDivElement[] = [];
+        private lastPosByIndex = new Map<number, number>();
         private pendingMeasure = false;
 
         constructor(private view: EditorView) {
-            this.cursorEl = document.createElement("div");
-            this.cursorEl.className = "cm-symi-ghost-cursor";
-            this.view.scrollDOM.appendChild(this.cursorEl);
             this.scheduleMeasure(view);
         }
 
@@ -47,7 +52,27 @@ export function createAnimatedCursor(): Extension {
         }
 
         destroy() {
-            this.cursorEl.remove();
+            for (const cursorEl of this.cursorEls) {
+                cursorEl.remove();
+            }
+            this.cursorEls = [];
+            this.lastPosByIndex.clear();
+        }
+
+        private ensureCursorCount(count: number) {
+            while (this.cursorEls.length < count) {
+                const cursorEl = document.createElement("div");
+                cursorEl.className = "cm-symi-ghost-cursor";
+                this.view.scrollDOM.appendChild(cursorEl);
+                this.cursorEls.push(cursorEl);
+            }
+            while (this.cursorEls.length > count) {
+                const cursorEl = this.cursorEls.pop();
+                cursorEl?.remove();
+            }
+            for (let index = count; index <= this.lastPosByIndex.size; index++) {
+                this.lastPosByIndex.delete(index);
+            }
         }
 
         private scheduleMeasure(view: EditorView) {
@@ -55,38 +80,58 @@ export function createAnimatedCursor(): Extension {
             this.pendingMeasure = true;
             view.requestMeasure({
                 read: (view) => {
-                    if (!view.hasFocus) return { visible: false };
-                    const pos = view.state.selection.main.head;
-                    const coords = view.coordsAtPos(pos, 1);
-                    if (!coords) return { visible: false };
+                    if (!view.hasFocus) return { visible: false, cursors: [] as Array<{ index: number; pos: number; x: number; y: number; height: number; isPrimary: boolean }> };
                     const scrollRect = view.scrollDOM.getBoundingClientRect();
+                    const cursors: Array<{ index: number; pos: number; x: number; y: number; height: number; isPrimary: boolean }> = [];
+
+                    view.state.selection.ranges.forEach((range, index) => {
+                        const pos = range.head;
+                        const coords = view.coordsAtPos(pos, 1);
+                        if (!coords) return;
+                        cursors.push({
+                            index,
+                            pos,
+                            x: coords.left - scrollRect.left + view.scrollDOM.scrollLeft,
+                            y: coords.top - scrollRect.top + view.scrollDOM.scrollTop,
+                            height: Math.max(1, coords.bottom - coords.top),
+                            isPrimary: index === view.state.selection.mainIndex,
+                        });
+                    });
+
+                    if (cursors.length === 0) return { visible: false, cursors };
                     return {
                         visible: true,
-                        pos,
-                        x: coords.left - scrollRect.left + view.scrollDOM.scrollLeft,
-                        y: coords.top - scrollRect.top + view.scrollDOM.scrollTop,
-                        height: Math.max(1, coords.bottom - coords.top),
+                        cursors,
                     };
                 },
                 write: (measure) => {
                     this.pendingMeasure = false;
                     if (!measure || !measure.visible) {
-                        this.cursorEl.style.opacity = "0";
+                        this.ensureCursorCount(0);
                         return;
                     }
-                    const pos = measure.pos ?? this.lastPos ?? 0;
-                    if (pos === this.lastPos && this.cursorEl.style.opacity !== "0") return;
-                    this.lastPos = pos;
 
-                    this.cursorEl.style.height = `${measure.height}px`;
-                    this.cursorEl.style.opacity = "1";
+                    const sorted = [...measure.cursors].sort((a, b) => a.index - b.index);
+                    this.ensureCursorCount(sorted.length);
 
-                    gsap.to(this.cursorEl, {
-                        duration: ANIM_DURATION,
-                        x: measure.x,
-                        y: measure.y,
-                        overwrite: true,
-                        ease: "power2.out",
+                    sorted.forEach((cursor, index) => {
+                        const cursorEl = this.cursorEls[index]!;
+                        cursorEl.className = `cm-symi-ghost-cursor ${cursor.isPrimary ? "cm-symi-ghost-cursor-primary" : "cm-symi-ghost-cursor-secondary"}`;
+                        cursorEl.style.height = `${cursor.height}px`;
+
+                        const lastPos = this.lastPosByIndex.get(index);
+                        if (lastPos === cursor.pos && cursorEl.style.opacity !== "0") {
+                            return;
+                        }
+                        this.lastPosByIndex.set(index, cursor.pos);
+
+                        gsap.to(cursorEl, {
+                            duration: ANIM_DURATION,
+                            x: cursor.x,
+                            y: cursor.y,
+                            overwrite: true,
+                            ease: "power2.out",
+                        });
                     });
                 },
             });

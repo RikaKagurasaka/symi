@@ -49,6 +49,7 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
         <ul class="list-disc pl-5 space-y-1 text-slate-300">
           <li><code class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-100">Ctrl+空格</code>：播放/暂停</li>
           <li><code class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-100">Ctrl+Z</code>：撤销</li>
+          <li><code class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-100">Ctrl+/（macOS: Cmd+/）</code>：切换当前行或选中区间所有行注释（<code class="px-1 py-0.5 rounded bg-slate-800 text-slate-100">//</code>）</li>
         </ul>
         <h3 class="text-slate-100 font-semibold">钢琴卷帘窗</h3>
         <ul class="list-disc pl-5 space-y-1 text-slate-300">

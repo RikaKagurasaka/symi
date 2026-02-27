@@ -11,6 +11,7 @@ import {
     eventsField,
     setEventsEffect,
 } from "./events";
+import { createCtrlSlashCommentHandler } from "./comment";
 import { createShiftSpacePlayHandler } from "./play";
 import { createTokenTheme } from "./tokenTheme";
 import type { Diagnostic, NoteEvent } from "./types";
@@ -87,6 +88,7 @@ export const createViewPlugin = (options?: ViewPluginOptions): Extension => {
     const activeNoteTheme = createActiveNoteTheme();
     const diagnosticsTooltip = createDiagnosticsHoverTooltip();
     const ctrlClickLogger = createCtrlClickEventLogger();
+    const ctrlSlashComment = createCtrlSlashCommentHandler();
     const shiftSpacePlay = createShiftSpacePlayHandler();
     const animatedCursorTheme = createAnimatedCursorTheme();
     const animatedCursor = createAnimatedCursor();
@@ -102,6 +104,7 @@ export const createViewPlugin = (options?: ViewPluginOptions): Extension => {
         animatedCursorTheme,
         diagnosticsTooltip,
         shiftSpacePlay,
+        ctrlSlashComment,
         ctrlClickLogger,
         animatedCursor,
         cursorInfoPlugin,
