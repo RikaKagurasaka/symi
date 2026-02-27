@@ -3,10 +3,41 @@ import { EditorView } from "@codemirror/view";
 import type { NoteEvent } from "./types";
 import { getEvents, playNotes } from "./events";
 
+type PlaybackState = {
+	isPlaying: boolean;
+	sessionId: number;
+};
+
 let isPlaying = false;
 let currentSessionId = 0;
 let scheduledTimers: number[] = [];
 let endTimer: number | null = null;
+const playbackStateListeners = new Set<(state: PlaybackState) => void>();
+const CURSOR_UPDATE_COALESCE_MS = 20;
+
+function emitPlaybackState() {
+	const state: PlaybackState = {
+		isPlaying,
+		sessionId: currentSessionId,
+	};
+	for (const listener of playbackStateListeners) {
+		listener(state);
+	}
+}
+
+function setPlaybackPlaying(nextPlaying: boolean) {
+	if (isPlaying === nextPlaying) return;
+	isPlaying = nextPlaying;
+	emitPlaybackState();
+}
+
+export function subscribePlaybackState(listener: (state: PlaybackState) => void): () => void {
+	playbackStateListeners.add(listener);
+	listener({ isPlaying, sessionId: currentSessionId });
+	return () => {
+		playbackStateListeners.delete(listener);
+	};
+}
 
 function clearScheduled() {
 	for (const id of scheduledTimers) {
@@ -21,7 +52,7 @@ function clearScheduled() {
 
 export function stopPlayback() {
 	currentSessionId += 1;
-	isPlaying = false;
+	setPlaybackPlaying(false);
 	clearScheduled();
 }
 
@@ -60,7 +91,32 @@ async function playNotesScheduled(view: EditorView, notes: NoteEvent[]) {
 	clearScheduled();
 	currentSessionId += 1;
 	const sessionId = currentSessionId;
-	isPlaying = true;
+	setPlaybackPlaying(true);
+	let pendingCursorAnchor: number | null = null;
+	let cursorFlushTimer: number | null = null;
+
+	const flushPendingCursorUpdate = () => {
+		if (!isPlaying || sessionId !== currentSessionId) {
+			pendingCursorAnchor = null;
+			return;
+		}
+		if (pendingCursorAnchor == null) return;
+		const safeAnchor = Math.min(pendingCursorAnchor, view.state.doc.length);
+		pendingCursorAnchor = null;
+		view.dispatch({
+			selection: { anchor: safeAnchor },
+		});
+	};
+
+	const queueCursorUpdate = (anchor: number) => {
+		pendingCursorAnchor = pendingCursorAnchor == null ? anchor : Math.max(pendingCursorAnchor, anchor);
+		if (cursorFlushTimer != null) return;
+		cursorFlushTimer = window.setTimeout(() => {
+			cursorFlushTimer = null;
+			flushPendingCursorUpdate();
+		}, CURSOR_UPDATE_COALESCE_MS);
+		scheduledTimers.push(cursorFlushTimer);
+	};
 
 	const sorted = [...notes].sort((a, b) => a.start_sec - b.start_sec);
 	const first_start_delay = sorted[0]!.start_sec * 1000;
@@ -76,9 +132,7 @@ async function playNotesScheduled(view: EditorView, notes: NoteEvent[]) {
 			if (!isPlaying || sessionId !== currentSessionId) return;
 			if (!note.span_invoked_to) {
 				const safePos = Math.min(note.span_to, view.state.doc.length);
-				view.dispatch({
-					selection: { anchor: safePos },
-				});
+				queueCursorUpdate(safePos);
 			}
 			playNotes(view, note);
 		}, delay);
@@ -87,7 +141,8 @@ async function playNotesScheduled(view: EditorView, notes: NoteEvent[]) {
 
 	endTimer = window.setTimeout(() => {
 		if (sessionId !== currentSessionId) return;
-		isPlaying = false;
+		flushPendingCursorUpdate();
+		setPlaybackPlaying(false);
 		clearScheduled();
 	}, maxEndMs + 50);
 }

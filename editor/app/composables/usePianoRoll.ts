@@ -5,7 +5,7 @@ import { getEvents } from "~/utils/cm";
 import type { NoteEvent } from "~/utils/cm";
 import { getNoteColorFromFreq } from "~/utils/colors";
 import { useSmoothWheelScroll } from "~/composables/useSmoothWheelScroll";
-import { playNotesInSelection } from "~/utils/cm";
+import { playNotesInSelection, subscribePlaybackState } from "~/utils/cm";
 
 type RenderNote = {
     id: string;
@@ -87,8 +87,19 @@ export function usePianoRoll({ editorState, editorView, containerRef, svgRef }: 
 
     const cursorVisual = reactive({
         visible: false,
+        second: 0,
         x: 0,
     });
+    const playbackCursorFallback = reactive({
+        active: false,
+        startSecond: 0,
+        startMs: 0,
+    });
+    const playbackStatus = reactive({
+        isPlaying: false,
+    });
+    let rafId: number | null = null;
+    let lastSyncedEditorCursorPos: number | null = null;
     let lastCursorHead = -1;
     let didInitialBaseFreqCenter = false;
 
@@ -589,18 +600,69 @@ export function usePianoRoll({ editorState, editorView, containerRef, svgRef }: 
     function syncCursorFromEditorState(state: EditorState, events: NoteEvent[]) {
         if (events.length === 0) {
             cursorVisual.visible = false;
+            playbackCursorFallback.active = false;
+            lastSyncedEditorCursorPos = null;
             return;
         }
 
         const cursorPos = state.selection.main.head;
-        const nearest = findNearestEventByCursorPos(events, cursorPos);
-        if (!nearest) {
-            cursorVisual.visible = false;
+        if (playbackStatus.isPlaying && lastSyncedEditorCursorPos === cursorPos) {
             return;
         }
 
+        const nearest = findNearestEventByCursorPos(events, cursorPos);
+        if (!nearest) {
+            cursorVisual.visible = false;
+            playbackCursorFallback.active = false;
+            return;
+        }
+
+        lastSyncedEditorCursorPos = cursorPos;
         cursorVisual.visible = true;
-        cursorVisual.x = (nearest.start_sec - axisBounds.minSecond) * layoutParams.pixelPerSecond;
+        cursorVisual.second = nearest.start_sec;
+        cursorVisual.x = (cursorVisual.second - axisBounds.minSecond) * layoutParams.pixelPerSecond;
+        playbackCursorFallback.startSecond = cursorVisual.second;
+        playbackCursorFallback.startMs = performance.now();
+        if (playbackStatus.isPlaying) {
+            startPlaybackCursorFallback();
+        }
+    }
+
+    function stepPlaybackCursorFallback() {
+        if (!playbackCursorFallback.active) {
+            rafId = null;
+            return;
+        }
+        if (!cursorVisual.visible) {
+            rafId = null;
+            return;
+        }
+
+        const elapsedSec = Math.max(0, (performance.now() - playbackCursorFallback.startMs) / 1000);
+        cursorVisual.second = playbackCursorFallback.startSecond + elapsedSec;
+        cursorVisual.x = (cursorVisual.second - axisBounds.minSecond) * layoutParams.pixelPerSecond;
+        draw(latestEvents.value);
+        scrollToCursorLineIfNeeded();
+
+        rafId = window.requestAnimationFrame(stepPlaybackCursorFallback);
+    }
+
+    function startPlaybackCursorFallback() {
+        if (!cursorVisual.visible) return;
+        playbackCursorFallback.active = true;
+        playbackCursorFallback.startSecond = cursorVisual.second;
+        playbackCursorFallback.startMs = performance.now();
+        if (rafId == null) {
+            rafId = window.requestAnimationFrame(stepPlaybackCursorFallback);
+        }
+    }
+
+    function stopPlaybackCursorFallback() {
+        playbackCursorFallback.active = false;
+        if (rafId != null) {
+            window.cancelAnimationFrame(rafId);
+            rafId = null;
+        }
     }
 
     function scrollToCursorLineIfNeeded() {
@@ -768,12 +830,23 @@ export function usePianoRoll({ editorState, editorView, containerRef, svgRef }: 
         redraw();
     });
 
+    const unsubscribePlaybackState = subscribePlaybackState(({ isPlaying }) => {
+        playbackStatus.isPlaying = isPlaying;
+        if (isPlaying) {
+            startPlaybackCursorFallback();
+            return;
+        }
+        stopPlaybackCursorFallback();
+    });
+
     watch(
         editorState,
         (newState) => {
             if (!newState) {
                 latestEvents.value = [];
                 cursorVisual.visible = false;
+                stopPlaybackCursorFallback();
+                lastSyncedEditorCursorPos = null;
                 lastCursorHead = -1;
                 didInitialBaseFreqCenter = false;
                 redraw();
@@ -799,6 +872,8 @@ export function usePianoRoll({ editorState, editorView, containerRef, svgRef }: 
     );
 
     onBeforeUnmount(() => {
+        stopPlaybackCursorFallback();
+        unsubscribePlaybackState();
         endPan();
     });
 
