@@ -621,22 +621,22 @@ impl Compiler {
             .map(|pitch| Note::from_pitch(pitch, &self.state))
     }
 
-    fn parse_pitch_chain_ident_as_pitch(&mut self, t: &SyntaxToken) -> Option<Pitch> {
+    fn parse_pitch_chain_ident_as_chain(&mut self, t: &SyntaxToken) -> Option<Vec<Pitch>> {
         debug_assert!(t.kind().is_identifier());
         let ident = t.text().to_string();
 
         if let Some(chain) = self.macros.alias_macros.get(ident.as_str()) {
-            if chain.len() == 1 {
-                return Some(chain[0]);
+            if chain.is_empty() {
+                self.error(
+                    format!(
+                        "Identifier in pitch chain cannot resolve to an empty alias macro: {}",
+                        ident
+                    ),
+                    t.text_range(),
+                );
+                return None;
             }
-            self.error(
-                format!(
-                    "Identifier in pitch chain must resolve to a macro with exactly one pitch atom: {}",
-                    ident
-                ),
-                t.text_range(),
-            );
-            return None;
+            return Some(chain.clone());
         }
 
         if self.macros.simple_macros.contains_key(ident.as_str()) {
@@ -689,8 +689,10 @@ impl Compiler {
                     pitch_atoms.push((pitch, token.text_range()));
                     expect_pitch = false;
                 } else if token.kind().is_identifier() {
-                    let pitch = self.parse_pitch_chain_ident_as_pitch(token)?;
-                    pitch_atoms.push((pitch, token.text_range()));
+                    let chain = self.parse_pitch_chain_ident_as_chain(token)?;
+                    for pitch in chain {
+                        pitch_atoms.push((pitch, token.text_range()));
+                    }
                     expect_pitch = false;
                 } else {
                     self.error(
@@ -783,8 +785,8 @@ impl Compiler {
                     pitch_atoms.push(pitch);
                     expect_pitch = false;
                 } else if token.kind().is_identifier() {
-                    let pitch = self.parse_pitch_chain_ident_as_pitch(token)?;
-                    pitch_atoms.push(pitch);
+                    let chain = self.parse_pitch_chain_ident_as_chain(token)?;
+                    pitch_atoms.extend(chain);
                     expect_pitch = false;
                 } else {
                     self.error(
@@ -797,8 +799,8 @@ impl Compiler {
                 let pitch = self.parse_pitch_atom(token, false)?;
                 pitch_atoms.push(pitch);
             } else if pitch_atoms.is_empty() && token.kind().is_identifier() {
-                let pitch = self.parse_pitch_chain_ident_as_pitch(token)?;
-                pitch_atoms.push(pitch);
+                let chain = self.parse_pitch_chain_ident_as_chain(token)?;
+                pitch_atoms.extend(chain);
             } else if token.kind().is_at() {
                 expect_pitch = true;
             } else if token.kind().is_plus() {
