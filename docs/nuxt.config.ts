@@ -45,6 +45,21 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'cloudflare-module',
+    // 2. 禁用 SourceMap
+    // Cloudflare 部署通常不需要 SourceMap，这能节省大量内存
+    sourceMap: false,
+    // 3. 开启 WASM 支持
+    // 这能解决 shiki/onig.wasm 的加载警告，防止它回退到低效模式
+    experimental: {
+      wasm: true
+    },
+    // 4. 针对 Shiki 的特定 Rollup 优化 (可选，如果上面不行再加这个)
+    rollupConfig: {
+      output: {
+        // 避免过度拆分 chunk
+        manualChunks: undefined,
+      }
+    },
     prerender: {
       routes: [
         '/'
