@@ -1,6 +1,6 @@
 [package]
 name = "symi-editor"
-version = "0.1.2"
+version = "0.1.4"
 description = "An text editor for Symi, a notation language for microtones."
 authors = ["Rika"]
 license = "Apache-2.0"
