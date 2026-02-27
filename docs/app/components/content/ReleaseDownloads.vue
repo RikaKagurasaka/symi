@@ -65,6 +65,10 @@ const { data, status, error, refresh } = await useFetch<LatestReleasePayload>(
   },
 );
 
+onMounted(() => {
+  refresh();
+});
+
 type DistributionAsset = {
   asset: ReleaseAsset;
   meta: DistributionMeta;

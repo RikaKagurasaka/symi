@@ -1,6 +1,10 @@
 import { fetchGithubLatestRelease } from '../../../utils/github'
 
-export default defineCachedEventHandler(async () => {
+export default defineCachedEventHandler(async (event) => {
+  setHeader(event, 'Cache-Control', 'no-cache, no-store, must-revalidate')
+  setHeader(event, 'Pragma', 'no-cache')
+  setHeader(event, 'Expires', '0')
+
   const config = useRuntimeConfig()
   const release = await fetchGithubLatestRelease(config.public.githubRepo, config.githubToken)
 
@@ -24,7 +28,7 @@ export default defineCachedEventHandler(async () => {
     }))
   }
 }, {
-  maxAge: 60 * 5,
-  staleMaxAge: 60 * 10,
+  maxAge: 60,
+  staleMaxAge: 60,
   swr: true
 })
