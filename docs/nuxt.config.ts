@@ -15,7 +15,6 @@ export default defineNuxtConfig({
     '@nuxt/content',
     'nuxt-og-image',
     'nuxt-llms',
-    '@nuxtjs/mcp-toolkit'
   ],
 
   devtools: {
@@ -45,13 +44,12 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: 'cloudflare-module', 
+    preset: 'cloudflare-module',
     prerender: {
       routes: [
         '/'
       ],
       ignore: [
-        '/mcp'
       ],
       crawlLinks: true,
       autoSubfolderIndex: false
@@ -133,12 +131,12 @@ export default defineNuxtConfig({
         ]
       },
       {
-        title: 'LLM & MCP',
-        description: 'Machine-friendly endpoints and MCP integration for AI tools.',
+        title: 'LLM',
+        description: 'Machine-friendly endpoints for AI tools.',
         links: [
           {
-            title: 'LLM & MCP Guide',
-            description: 'How to use llms.txt, llms-full.txt and MCP endpoints.',
+            title: 'LLM Guide',
+            description: 'How to use llms.txt, llms-full.txt.',
             href: '/llm'
           }
         ]
@@ -146,15 +144,8 @@ export default defineNuxtConfig({
     ],
     notes: [
       'For machine consumption, prefer /llms.txt for index-level context and /llms-full.txt for detailed content.',
-      'MCP tools are available at /mcp and include list-pages and get-page for documentation retrieval.'
     ]
   },
 
-  mcp: {
-    name: 'Symi Documentation MCP',
-    version: '1.0.0',
-    route: '/mcp',
-    browserRedirect: '/llm',
-    dir: 'mcp'
-  }
+
 })
